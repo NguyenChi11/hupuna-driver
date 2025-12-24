@@ -10,6 +10,8 @@ interface AssetModalProps {
   setNewName: (n: string) => void;
   newUrl: string;
   setNewUrl: (u: string) => void;
+  file: File | null;
+  setFile: (f: File | null) => void;
   isAnalyzing: boolean;
   handleCreate: () => void;
 }
@@ -22,9 +24,34 @@ const AssetModal: React.FC<AssetModalProps> = ({
   setNewName,
   newUrl,
   setNewUrl,
+  file,
+  setFile,
   isAnalyzing,
   handleCreate,
 }) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
+      setNewName(selectedFile.name);
+
+      const type = selectedFile.type;
+      const name = selectedFile.name.toLowerCase();
+
+      if (
+        type.startsWith("image/") ||
+        /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff)$/.test(name)
+      ) {
+        setNewType("image");
+      } else if (
+        type.startsWith("video/") ||
+        /\.(mp4|webm|ogg|mov|avi|mkv|wmv|flv|m4v)$/.test(name)
+      ) {
+        setNewType("video");
+      }
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/30 backdrop-blur-sm p-4">
       <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
@@ -61,28 +88,40 @@ const AssetModal: React.FC<AssetModalProps> = ({
               <div className="grid grid-cols-3 gap-2">
                 {(
                   [
-                    { id: "folder", icon: ICONS.Folder },
-                    { id: "image", icon: ICONS.Image },
-                    { id: "video", icon: ICONS.Video },
-                    { id: "link", icon: ICONS.Link },
-                    { id: "file", icon: ICONS.File },
+                    { id: "folder", icon: ICONS.Folder, label: "FOLDER" },
+                    { id: "media", icon: ICONS.Image, label: "MEDIA" },
+                    { id: "link", icon: ICONS.Link, label: "LINK" },
+                    { id: "file", icon: ICONS.File, label: "FILE" },
                   ] as const
-                ).map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setNewType(t.id)}
-                    className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-2xl border-2 transition-all ${
-                      newType === t.id
-                        ? "bg-blue-600 border-blue-600 text-white shadow-lg"
-                        : "bg-white border-gray-100 text-gray-500 hover:border-blue-100"
-                    }`}
-                  >
-                    <t.icon className="w-5 h-5" />
-                    <span className="text-[10px] font-bold uppercase">
-                      {t.id}
-                    </span>
-                  </button>
-                ))}
+                ).map((t) => {
+                  const isActive =
+                    t.id === "media"
+                      ? newType === "image" || newType === "video"
+                      : newType === t.id;
+
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => {
+                        if (t.id === "media") {
+                          setNewType("image");
+                        } else {
+                          setNewType(t.id as ItemType | "folder");
+                        }
+                      }}
+                      className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-2xl border-2 transition-all ${
+                        isActive
+                          ? "bg-blue-600 border-blue-600 text-white shadow-lg"
+                          : "bg-white border-gray-100 text-gray-500 hover:border-blue-100"
+                      }`}
+                    >
+                      <t.icon className="w-5 h-5" />
+                      <span className="text-[10px] font-bold uppercase">
+                        {t.label}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -100,17 +139,48 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 />
               </div>
               {newType !== "folder" && (
-                <div className="animate-in slide-in-from-bottom-2 duration-300">
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                    Link / URL (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={newUrl}
-                    onChange={(e) => setNewUrl(e.target.value)}
-                    placeholder="https://example.com/file.pdf"
-                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-300 transition-all text-sm font-bold"
-                  />
+                <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                      Upload File
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        onChange={handleFileChange}
+                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:tracking-widest file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100 transition-all cursor-pointer bg-gray-50 rounded-2xl border border-gray-100"
+                        accept={
+                          newType === "image" || newType === "video"
+                            ? "image/*,video/*"
+                            : "*"
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-100"></div>
+                    </div>
+                    <div className="relative flex justify-center text-[10px] uppercase tracking-widest">
+                      <span className="px-2 bg-white text-gray-300 font-black">
+                        Or use URL
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                      Link / URL (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={newUrl}
+                      onChange={(e) => setNewUrl(e.target.value)}
+                      placeholder="https://example.com/file.pdf"
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-300 transition-all text-sm font-bold"
+                    />
+                  </div>
                 </div>
               )}
             </div>

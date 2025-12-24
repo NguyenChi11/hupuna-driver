@@ -5,14 +5,14 @@ import FileCard from "@/components/ui/FileCard";
 import FilterBar from "@/components/ui/FilterBar";
 import Header from "@/components/ui/Header";
 import Sidebar from "@/components/ui/SideBar";
-import Image from "next/image";
 import React from "react";
-const { useEffect, useMemo, useState } = React;
 import { FileItem, FolderItem, ItemType } from "@/types/types";
 import { INITIAL_FOLDERS, INITIAL_ITEMS } from "@/data/testData";
+
+const { useEffect, useMemo, useState } = React;
 const analyzeFileAI = async (
   fileName: string,
-  type: string
+  type: ItemType
 ): Promise<{ description: string; tags: string[] }> => {
   return { description: "", tags: [] };
 };
@@ -28,6 +28,7 @@ export default function Home() {
   const [newType, setNewType] = useState<ItemType | "folder">("folder");
   const [newName, setNewName] = useState("");
   const [newUrl, setNewUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -70,18 +71,47 @@ export default function Home() {
 
     // Global navigation vs Folder browsing
     if (sidebarSection !== "all") {
-      const type = sidebarSection;
-      if (type === "folder") {
-        resultItems = folders;
+      const isGlobal = sidebarSection.startsWith("global:");
+      const type = isGlobal ? sidebarSection.slice(7) : sidebarSection;
+      const scopeTarget = isGlobal ? "global" : "local";
+      if (type === "all") {
+        const scopedFolders = folders.filter(
+          (f) => (f.scope === "global" ? "global" : "local") === scopeTarget
+        );
+        const scopedItems = items.filter(
+          (i: FileItem) =>
+            (i.scope === "global" ? "global" : "local") === scopeTarget
+        );
+        resultItems = [...scopedFolders, ...scopedItems];
+        const typeOrder = ["folder", "image", "video", "link", "file"];
+        resultItems.sort((a, b) => {
+          const typeA = "type" in a ? a.type : "folder";
+          const typeB = "type" in b ? b.type : "folder";
+          const orderDiff = typeOrder.indexOf(typeA) - typeOrder.indexOf(typeB);
+          if (orderDiff !== 0) return orderDiff;
+          return b.createdAt - a.createdAt;
+        });
+      } else if (type === "folder") {
+        resultItems = folders.filter(
+          (f) => (f.scope === "global" ? "global" : "local") === scopeTarget
+        );
       } else {
-        resultItems = items.filter((i) => i.type === type);
+        resultItems = items.filter(
+          (i) =>
+            i.type === (type as ItemType) &&
+            (i.scope === "global" ? "global" : "local") === scopeTarget
+        );
       }
     } else {
       // "All Files" logic
       const currentFolders = folders.filter(
-        (f) => f.parentId === currentFolderId
+        (f) =>
+          f.parentId === currentFolderId && (f.scope ?? "local") === "local"
       );
-      const currentFiles = items.filter((i) => i.parentId === currentFolderId);
+      const currentFiles = items.filter(
+        (i: FileItem) =>
+          i.parentId === currentFolderId && (i.scope ?? "local") === "local"
+      );
 
       // Merge for sorting
       resultItems = [...currentFolders, ...currentFiles];
@@ -101,7 +131,7 @@ export default function Home() {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       resultItems = resultItems.filter(
-        (item) =>
+        (item: FileItem | FolderItem) =>
           item.name.toLowerCase().includes(q) ||
           ("tags" in item &&
             item.tags?.some((t) => t.toLowerCase().includes(q)))
@@ -110,7 +140,7 @@ export default function Home() {
 
     // Contextual Navigation Filter (Horizontal bar)
     if (activeType !== "all") {
-      resultItems = resultItems.filter((item) => {
+      resultItems = resultItems.filter((item: FileItem | FolderItem) => {
         const itemType = "type" in item ? item.type : "folder";
         return itemType === activeType;
       });
@@ -127,12 +157,20 @@ export default function Home() {
   ]);
 
   const counts = useMemo(() => {
-    const baseItems =
+    const baseItems: (FileItem | FolderItem)[] =
       sidebarSection !== "all"
         ? sortedAndFilteredItems
         : [
-            ...folders.filter((f) => f.parentId === currentFolderId),
-            ...items.filter((i) => i.parentId === currentFolderId),
+            ...folders.filter(
+              (f) =>
+                f.parentId === currentFolderId &&
+                (f.scope ?? "local") === "local"
+            ),
+            ...items.filter(
+              (i: FileItem) =>
+                i.parentId === currentFolderId &&
+                (i.scope ?? "local") === "local"
+            ),
           ];
 
     return {
@@ -148,26 +186,39 @@ export default function Home() {
   const handleCreate = async () => {
     if (!newName) return;
 
+    const isGlobal = sidebarSection.startsWith("global:");
+    const scopeTarget: "local" | "global" = isGlobal ? "global" : "local";
+    const targetParentId = isGlobal ? null : currentFolderId;
+
     if (newType === "folder") {
       const newFolder: FolderItem = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: Math.random().toString(36).slice(2, 11),
         name: newName,
-        parentId: currentFolderId,
+        parentId: targetParentId,
         createdAt: Date.now(),
+        scope: scopeTarget,
       };
       setFolders((prev) => [...prev, newFolder]);
     } else {
       setIsAnalyzing(true);
       const aiData = await analyzeFileAI(newName, newType);
+
+      let finalUrl = newUrl;
+      if (file) {
+        finalUrl = URL.createObjectURL(file);
+      }
+
       const newItem: FileItem = {
         id: Math.random().toString(36).substr(2, 9),
         name: newName,
         type: newType as ItemType,
-        parentId: currentFolderId,
+        parentId: targetParentId,
         createdAt: Date.now(),
-        url: newUrl,
+        url: finalUrl,
+        size: file ? file.size : undefined,
         description: aiData.description,
         tags: aiData.tags,
+        scope: scopeTarget,
       };
       setItems((prev) => [...prev, newItem]);
       setIsAnalyzing(false);
@@ -175,6 +226,7 @@ export default function Home() {
 
     setNewName("");
     setNewUrl("");
+    setFile(null);
     setIsModalOpen(false);
   };
 
@@ -213,6 +265,11 @@ export default function Home() {
           setCurrentFolderId(null);
           setActiveType("all");
         }}
+        setSectionGlobal={(s) => {
+          setSidebarSection(s);
+          setCurrentFolderId(null);
+          setActiveType("all");
+        }}
       />
 
       <main className="flex-1 flex flex-col min-w-0 bg-white md:rounded-l-[40px] shadow-2xl relative overflow-hidden">
@@ -237,7 +294,7 @@ export default function Home() {
                     <ICONS.ChevronRight className="w-3 h-3 mx-1" />
                     <button
                       onClick={() => setCurrentFolderId(f.id)}
-                      className="hover:text-blue-600 transition-colors truncate max-w-[120px]"
+                      className="hover:text-blue-600 transition-colors truncate max-w-30"
                     >
                       {f.name}
                     </button>
@@ -260,34 +317,123 @@ export default function Home() {
             />
 
             {/* Content Grid */}
-            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-              {sortedAndFilteredItems.map((item) => (
-                <FileCard
-                  key={item.id}
-                  item={item}
-                  onOpen={(item: unknown) =>
-                    handleOpen(item as FileItem | FolderItem)
-                  }
-                  onDelete={handleDelete}
-                  isDeleting={deletingId === item.id}
-                />
-              ))}
-
-              {/* Empty State */}
-              {sortedAndFilteredItems.length === 0 && (
-                <div className="col-span-full py-32 flex flex-col items-center justify-center text-center opacity-60">
-                  <div className="bg-gray-50 p-8 rounded-[40px] mb-6 border border-gray-100">
-                    <ICONS.Cloud className="w-16 h-16 text-gray-200" />
+            {(sidebarSection === "all" || sidebarSection === "global:all") &&
+            activeType === "all" ? (
+              <>
+                {[
+                  {
+                    id: "folder",
+                    label: "Thư mục",
+                    icon: ICONS.Folder,
+                    items: sortedAndFilteredItems.filter(
+                      (i: FileItem | FolderItem) => !("type" in i)
+                    ),
+                  },
+                  {
+                    id: "image",
+                    label: "Ảnh",
+                    icon: ICONS.Image,
+                    items: sortedAndFilteredItems.filter(
+                      (i: FileItem | FolderItem) =>
+                        "type" in i && i.type === "image"
+                    ),
+                  },
+                  {
+                    id: "video",
+                    label: "Video",
+                    icon: ICONS.Video,
+                    items: sortedAndFilteredItems.filter(
+                      (i: FileItem | FolderItem) =>
+                        "type" in i && i.type === "video"
+                    ),
+                  },
+                  {
+                    id: "link",
+                    label: "Link",
+                    icon: ICONS.Link,
+                    items: sortedAndFilteredItems.filter(
+                      (i: FileItem | FolderItem) =>
+                        "type" in i && i.type === "link"
+                    ),
+                  },
+                  {
+                    id: "file",
+                    label: "Document",
+                    icon: ICONS.File,
+                    items: sortedAndFilteredItems.filter(
+                      (i: FileItem | FolderItem) =>
+                        "type" in i && i.type === "file"
+                    ),
+                  },
+                ].map((group) =>
+                  group.items.length > 0 ? (
+                    <div key={group.id} className="mt-8">
+                      <div className="flex items-center gap-2 mb-4">
+                        <group.icon className="w-4 h-4 text-gray-400" />
+                        <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest">
+                          {group.label}
+                        </h2>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                        {group.items.map((item: FileItem | FolderItem) => (
+                          <FileCard
+                            key={item.id}
+                            item={item}
+                            onOpen={(item: unknown) =>
+                              handleOpen(item as FileItem | FolderItem)
+                            }
+                            onDelete={handleDelete}
+                            isDeleting={deletingId === item.id}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null
+                )}
+                {sortedAndFilteredItems.length === 0 && (
+                  <div className="col-span-full py-32 flex flex-col items-center justify-center text-center opacity-60">
+                    <div className="bg-gray-50 p-8 rounded-[40px] mb-6 border border-gray-100">
+                      <ICONS.Cloud className="w-16 h-16 text-gray-200" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900">
+                      No assets found
+                    </h3>
+                    <p className="text-sm text-gray-500 max-w-xs mx-auto mt-2">
+                      Try changing your filters or add a new asset to this
+                      space.
+                    </p>
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900">
-                    No assets found
-                  </h3>
-                  <p className="text-sm text-gray-500 max-w-xs mx-auto mt-2">
-                    Try changing your filters or add a new asset to this space.
-                  </p>
-                </div>
-              )}
-            </div>
+                )}
+              </>
+            ) : (
+              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                {sortedAndFilteredItems.map((item: FileItem | FolderItem) => (
+                  <FileCard
+                    key={item.id}
+                    item={item}
+                    onOpen={(item: unknown) =>
+                      handleOpen(item as FileItem | FolderItem)
+                    }
+                    onDelete={handleDelete}
+                    isDeleting={deletingId === item.id}
+                  />
+                ))}
+                {sortedAndFilteredItems.length === 0 && (
+                  <div className="col-span-full py-32 flex flex-col items-center justify-center text-center opacity-60">
+                    <div className="bg-gray-50 p-8 rounded-[40px] mb-6 border border-gray-100">
+                      <ICONS.Cloud className="w-16 h-16 text-gray-200" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900">
+                      No assets found
+                    </h3>
+                    <p className="text-sm text-gray-500 max-w-xs mx-auto mt-2">
+                      Try changing your filters or add a new asset to this
+                      space.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </main>
@@ -302,6 +448,8 @@ export default function Home() {
           setNewName={setNewName}
           newUrl={newUrl}
           setNewUrl={setNewUrl}
+          file={file}
+          setFile={setFile}
           isAnalyzing={isAnalyzing}
           handleCreate={handleCreate}
         />

@@ -11,6 +11,7 @@ export interface FileItem {
   thumbnail?: string;
   description?: string;
   tags?: string[];
+  scope?: "local" | "global";
 }
 
 export interface FolderItem {
@@ -18,6 +19,8 @@ export interface FolderItem {
   name: string;
   parentId: string | null;
   createdAt: number;
+  children?: FolderItem[];
+  scope?: "local" | "global";
 }
 
 export interface FileSystemState {
