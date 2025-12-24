@@ -18,7 +18,7 @@ const MenuSection: React.FC<{
 }> = ({ title, items, isActive, onItemClick }) => {
   return (
     <div className="space-y-1">
-      <p className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
+      <p className="px-3 text-[0.625rem] font-bold text-gray-400 uppercase tracking-widest mb-2">
         {title}
       </p>
       {items.map((item) => (
@@ -58,7 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <div className="w-64 bg-white h-screen border-r border-gray-100 flex flex-col pt-6 hidden md:flex">
+    <div className="w-64 bg-white h-screen border-r border-gray-100  flex-col pt-6 hidden md:flex">
       <div className="px-6 mb-8 flex items-center gap-3">
         <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-100">
           <ICONS.Cloud className="text-white w-6 h-6" />
@@ -82,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         />
 
         <div className="pt-6">
-          <p className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
+          <p className="px-3 text-[0.625rem] font-bold text-gray-400 uppercase tracking-widest mb-2">
             System
           </p>
           <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-50">

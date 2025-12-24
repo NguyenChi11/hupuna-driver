@@ -9,7 +9,7 @@ export const COLORS = {
 export const STORAGE_KEY = "CORP_DRIVE_DATA";
 
 export const ICONS = {
-  Folder: (props: any) => (
+  Folder: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -25,7 +25,7 @@ export const ICONS = {
       <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
     </svg>
   ),
-  File: (props: any) => (
+  File: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -42,7 +42,7 @@ export const ICONS = {
       <polyline points="14 2 14 8 20 8" />
     </svg>
   ),
-  Image: (props: any) => (
+  Image: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -60,7 +60,7 @@ export const ICONS = {
       <polyline points="21 15 16 10 5 21" />
     </svg>
   ),
-  Video: (props: any) => (
+  Video: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -77,7 +77,7 @@ export const ICONS = {
       <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
     </svg>
   ),
-  Link: (props: any) => (
+  Link: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -94,7 +94,7 @@ export const ICONS = {
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
   ),
-  Search: (props: any) => (
+  Search: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -111,7 +111,7 @@ export const ICONS = {
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   ),
-  Plus: (props: any) => (
+  Plus: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -128,7 +128,7 @@ export const ICONS = {
       <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   ),
-  More: (props: any) => (
+  More: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -146,7 +146,7 @@ export const ICONS = {
       <circle cx="12" cy="19" r="1" />
     </svg>
   ),
-  Trash: (props: any) => (
+  Trash: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -165,7 +165,7 @@ export const ICONS = {
       <line x1="14" y1="11" x2="14" y2="17" />
     </svg>
   ),
-  Grid: (props: any) => (
+  Grid: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -184,7 +184,7 @@ export const ICONS = {
       <rect x="3" y="14" width="7" height="7" />
     </svg>
   ),
-  List: (props: any) => (
+  List: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -205,7 +205,7 @@ export const ICONS = {
       <line x1="3" y1="18" x2="3.01" y2="18" />
     </svg>
   ),
-  ChevronRight: (props: any) => (
+  ChevronRight: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -221,7 +221,7 @@ export const ICONS = {
       <polyline points="9 18 15 12 9 6" />
     </svg>
   ),
-  Cloud: (props: any) => (
+  Cloud: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -237,7 +237,7 @@ export const ICONS = {
       <path d="M17.5 19A5.5 5.5 0 0 0 18 8.02a7 7 0 1 0-13.63 2.12A4.5 4.5 0 0 0 6.5 19h11z" />
     </svg>
   ),
-  Ai: (props: any) => (
+  Ai: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -255,6 +255,23 @@ export const ICONS = {
       <path d="M19 17v4" />
       <path d="M3 5h4" />
       <path d="M17 19h4" />
+    </svg>
+  ),
+  Edit: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
     </svg>
   ),
 };

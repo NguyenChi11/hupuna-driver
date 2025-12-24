@@ -36,7 +36,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
           {filter.icon && <filter.icon className="w-3.5 h-3.5" />}
           {filter.label}
           <span
-            className={`ml-1 px-1.5 py-0.5 rounded-md text-[10px] ${
+            className={`ml-1 px-1.5 py-0.5 rounded-md text-[0.625rem] ${
               activeType === filter.id ? "bg-white/20" : "bg-gray-100"
             }`}
           >

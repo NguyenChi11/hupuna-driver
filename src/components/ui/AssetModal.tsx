@@ -33,7 +33,9 @@ const AssetModal: React.FC<AssetModalProps> = ({
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       setFile(selectedFile);
-      setNewName(selectedFile.name);
+      if (!newName.trim()) {
+        setNewName(selectedFile.name);
+      }
 
       const type = selectedFile.type;
       const name = selectedFile.name.toLowerCase();
@@ -54,7 +56,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/30 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="p-10">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-black text-gray-900 tracking-tight">
@@ -82,7 +84,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
           <div className="space-y-6">
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+              <label className="block text-[0.875rem] font-black text-gray-400 uppercase tracking-widest mb-3">
                 Asset Type
               </label>
               <div className="grid grid-cols-3 gap-2">
@@ -116,7 +118,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                       }`}
                     >
                       <t.icon className="w-5 h-5" />
-                      <span className="text-[10px] font-bold uppercase">
+                      <span className="text-[0.875rem] font-bold uppercase">
                         {t.label}
                       </span>
                     </button>
@@ -127,7 +129,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
             <div className="space-y-4">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                <label className="block text-[0.875rem] font-black text-gray-400 uppercase tracking-widest mb-2">
                   Display Name
                 </label>
                 <input
@@ -140,38 +142,44 @@ const AssetModal: React.FC<AssetModalProps> = ({
               </div>
               {newType !== "folder" && (
                 <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                      Upload File
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="file"
-                        onChange={handleFileChange}
-                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:tracking-widest file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100 transition-all cursor-pointer bg-gray-50 rounded-2xl border border-gray-100"
-                        accept={
-                          newType === "image" || newType === "video"
-                            ? "image/*,video/*"
-                            : "*"
-                        }
-                      />
-                    </div>
-                  </div>
+                  {newType !== "link" && (
+                    <>
+                      <div>
+                        <label className="block text-[0.875rem] font-black text-gray-400 uppercase tracking-widest mb-2">
+                          Upload File
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="file"
+                            onChange={handleFileChange}
+                            className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:tracking-widest file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100 transition-all cursor-pointer bg-gray-50 rounded-2xl border border-gray-100"
+                            accept={
+                              newType === "image" || newType === "video"
+                                ? "image/*,video/*"
+                                : "*"
+                            }
+                          />
+                        </div>
+                      </div>
 
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-100"></div>
-                    </div>
-                    <div className="relative flex justify-center text-[10px] uppercase tracking-widest">
-                      <span className="px-2 bg-white text-gray-300 font-black">
-                        Or use URL
-                      </span>
-                    </div>
-                  </div>
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-gray-100"></div>
+                        </div>
+                        <div className="relative flex justify-center text-[0.875rem] uppercase tracking-widest">
+                          <span className="px-2 bg-white text-gray-300 font-black">
+                            Or use URL
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                      Link / URL (Optional)
+                    <label className="block text-[0.875rem] font-black text-gray-400 uppercase tracking-widest mb-2">
+                      {newType === "link"
+                        ? "Link / URL"
+                        : "Link / URL (Optional)"}
                     </label>
                     <input
                       type="text"
@@ -193,9 +201,12 @@ const AssetModal: React.FC<AssetModalProps> = ({
             )}
 
             <button
-              disabled={!newName || isAnalyzing}
+              disabled={
+                isAnalyzing ||
+                (newType === "folder" ? !newName : !newName && !newUrl && !file)
+              }
               onClick={handleCreate}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white py-5 rounded-[28px] font-black shadow-xl shadow-blue-100 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 uppercase text-xs tracking-widest"
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white py-5 rounded-[1.75rem] font-black shadow-xl shadow-blue-100 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 uppercase text-xs tracking-widest"
             >
               {isAnalyzing ? "Processing..." : `Create ${newType}`}
             </button>

@@ -184,7 +184,12 @@ export default function Home() {
   }, [currentFolderId, folders, items, sidebarSection, sortedAndFilteredItems]);
 
   const handleCreate = async () => {
-    if (!newName) return;
+    if (newType === "folder" && !newName) return;
+    if (newType === "link") {
+      if (!newUrl) return; // Must have URL for link
+    } else {
+      if (newType !== "folder" && !newName && !newUrl && !file) return;
+    }
 
     const isGlobal = sidebarSection.startsWith("global:");
     const scopeTarget: "local" | "global" = isGlobal ? "global" : "local";
@@ -200,22 +205,34 @@ export default function Home() {
       };
       setFolders((prev) => [...prev, newFolder]);
     } else {
+      let finalName = newName;
+      if (!finalName) {
+        if (newType === "link") {
+          finalName = newUrl;
+        } else {
+          if (file) finalName = file.name;
+          else if (newUrl) finalName = newUrl;
+          else finalName = "Untitled";
+        }
+      }
+
       setIsAnalyzing(true);
-      const aiData = await analyzeFileAI(newName, newType);
+      const aiData = await analyzeFileAI(finalName, newType);
 
       let finalUrl = newUrl;
-      if (file) {
+      // Only use file object URL if NOT a link type (link type uses direct URL)
+      if (newType !== "link" && file) {
         finalUrl = URL.createObjectURL(file);
       }
 
       const newItem: FileItem = {
         id: Math.random().toString(36).substr(2, 9),
-        name: newName,
+        name: finalName,
         type: newType as ItemType,
         parentId: targetParentId,
         createdAt: Date.now(),
         url: finalUrl,
-        size: file ? file.size : undefined,
+        size: newType !== "link" && file ? file.size : undefined,
         description: aiData.description,
         tags: aiData.tags,
         scope: scopeTarget,
@@ -238,6 +255,22 @@ export default function Home() {
       else setItems((prev) => prev.filter((i) => i.id !== id));
       setDeletingId(null);
     }, 400);
+  };
+
+  const handleRename = (
+    id: string,
+    newName: string,
+    type: "item" | "folder"
+  ) => {
+    if (type === "folder") {
+      setFolders((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, name: newName } : f))
+      );
+    } else {
+      setItems((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, name: newName } : i))
+      );
+    }
   };
 
   const handleOpen = (item: FileItem | FolderItem) => {
@@ -272,14 +305,14 @@ export default function Home() {
         }}
       />
 
-      <main className="flex-1 flex flex-col min-w-0 bg-white md:rounded-l-[40px] shadow-2xl relative overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 bg-white md:rounded-l-[2.5rem] shadow-2xl relative overflow-hidden">
         <Header onSearch={setSearchQuery} onNew={() => setIsModalOpen(true)} />
 
         <div className="flex-1 overflow-y-auto no-scrollbar pb-20 px-8">
           <div className="max-w-7xl mx-auto">
             {/* Breadcrumbs & Title */}
             <div className="pt-8">
-              <nav className="flex items-center gap-1 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+              <nav className="flex items-center gap-1 text-[0.875rem] font-black text-gray-400 uppercase tracking-widest mb-1">
                 <button
                   onClick={() => {
                     setCurrentFolderId(null);
@@ -383,6 +416,7 @@ export default function Home() {
                               handleOpen(item as FileItem | FolderItem)
                             }
                             onDelete={handleDelete}
+                            onRename={handleRename}
                             isDeleting={deletingId === item.id}
                           />
                         ))}
@@ -392,7 +426,7 @@ export default function Home() {
                 )}
                 {sortedAndFilteredItems.length === 0 && (
                   <div className="col-span-full py-32 flex flex-col items-center justify-center text-center opacity-60">
-                    <div className="bg-gray-50 p-8 rounded-[40px] mb-6 border border-gray-100">
+                    <div className="bg-gray-50 p-8 rounded-[2.5rem] mb-6 border border-gray-100">
                       <ICONS.Cloud className="w-16 h-16 text-gray-200" />
                     </div>
                     <h3 className="text-xl font-bold text-gray-900">
@@ -415,12 +449,13 @@ export default function Home() {
                       handleOpen(item as FileItem | FolderItem)
                     }
                     onDelete={handleDelete}
+                    onRename={handleRename}
                     isDeleting={deletingId === item.id}
                   />
                 ))}
                 {sortedAndFilteredItems.length === 0 && (
                   <div className="col-span-full py-32 flex flex-col items-center justify-center text-center opacity-60">
-                    <div className="bg-gray-50 p-8 rounded-[40px] mb-6 border border-gray-100">
+                    <div className="bg-gray-50 p-8 rounded-[2.5rem] mb-6 border border-gray-100">
                       <ICONS.Cloud className="w-16 h-16 text-gray-200" />
                     </div>
                     <h3 className="text-xl font-bold text-gray-900">
