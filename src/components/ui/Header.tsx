@@ -21,13 +21,13 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onNew }) => {
       <div className="flex items-center gap-6 ml-6">
         <button
           onClick={onNew}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-2xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-blue-200 active:scale-95"
+          className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-2xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-blue-200 active:scale-95"
         >
           <ICONS.Plus className="w-5 h-5" />
           <span>New Asset</span>
         </button>
         <div className="flex items-center gap-3 pl-6 border-l border-gray-100">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-blue-400 flex items-center justify-center text-white font-bold text-sm shadow-md">
+          <div className="h-10 w-10 rounded-2xl bg-linear-to-tr from-blue-600 to-blue-400 flex items-center justify-center text-white font-bold text-sm shadow-md">
             JD
           </div>
         </div>

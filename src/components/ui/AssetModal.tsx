@@ -64,7 +64,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-900 transition-colors"
+              className="cursor-pointer text-gray-400 hover:text-gray-900 transition-colors"
             >
               <svg
                 className="w-6 h-6"
@@ -111,7 +111,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                           setNewType(t.id as ItemType | "folder");
                         }
                       }}
-                      className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-2xl border-2 transition-all ${
+                      className={` cursor-pointer flex flex-col items-center justify-center gap-1.5 py-3 rounded-2xl border-2 transition-all ${
                         isActive
                           ? "bg-blue-600 border-blue-600 text-white shadow-lg"
                           : "bg-white border-gray-100 text-gray-500 hover:border-blue-100"
@@ -148,17 +148,51 @@ const AssetModal: React.FC<AssetModalProps> = ({
                         <label className="block text-[0.875rem] font-black text-gray-400 uppercase tracking-widest mb-2">
                           Upload File
                         </label>
-                        <div className="relative">
+                        <div className="relative group">
                           <input
+                            id="file-upload"
                             type="file"
-                            onChange={handleFileChange}
-                            className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:tracking-widest file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100 transition-all cursor-pointer bg-gray-50 rounded-2xl border border-gray-100"
+                            onChange={(e) => {
+                              handleFileChange(e);
+                              if (e.target.files && e.target.files.length > 0) {
+                                setNewUrl(""); // Clear URL if file is selected
+                              }
+                            }}
+                            disabled={!!newUrl} // Disable file upload if URL exists
+                            className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:tracking-widest file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100 transition-all cursor-pointer bg-gray-50 rounded-2xl border border-gray-100 disabled:opacity-50 disabled:cursor-not-allowed pr-10"
                             accept={
                               newType === "image" || newType === "video"
                                 ? "image/*,video/*"
                                 : "*"
                             }
                           />
+                          {file && !newUrl && (
+                            <button
+                              onClick={() => {
+                                setFile(null);
+                                const fileInput = document.getElementById(
+                                  "file-upload"
+                                ) as HTMLInputElement;
+                                if (fileInput) fileInput.value = "";
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-gray-200 hover:bg-red-100 hover:text-red-600 text-gray-500 rounded-full transition-colors"
+                              title="Remove selected file"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="w-4 h-4"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -184,9 +218,16 @@ const AssetModal: React.FC<AssetModalProps> = ({
                     <input
                       type="text"
                       value={newUrl}
-                      onChange={(e) => setNewUrl(e.target.value)}
+                      onChange={(e) => {
+                        setNewUrl(e.target.value);
+                        if (e.target.value) {
+                          setFile(null); // Clear file if URL is entered
+                          // Reset file input value manually if needed, but react state handling usually suffices for logic
+                        }
+                      }}
+                      disabled={!!file} // Disable URL input if file exists
                       placeholder="https://example.com/file.pdf"
-                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-300 transition-all text-sm font-bold"
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-300 transition-all text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -206,7 +247,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 (newType === "folder" ? !newName : !newName && !newUrl && !file)
               }
               onClick={handleCreate}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white py-5 rounded-[1.75rem] font-black shadow-xl shadow-blue-100 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 uppercase text-xs tracking-widest"
+              className="cursor-pointer w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white py-5 rounded-[1.75rem] font-black shadow-xl shadow-blue-100 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 uppercase text-xs tracking-widest"
             >
               {isAnalyzing ? "Processing..." : `Create ${newType}`}
             </button>

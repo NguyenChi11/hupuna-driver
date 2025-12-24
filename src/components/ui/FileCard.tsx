@@ -105,7 +105,7 @@ const FileCard: React.FC<FileCardProps> = ({
               setEditedName(item.name);
               setIsEditing(true);
             }}
-            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+            className="cursor-pointer p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
           >
             <ICONS.Edit className="w-4 h-4" />
           </button>
@@ -114,7 +114,7 @@ const FileCard: React.FC<FileCardProps> = ({
               e.stopPropagation();
               onDelete(item.id, isFolder ? "folder" : "item");
             }}
-            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+            className="cursor-pointer p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
           >
             <ICONS.Trash className="w-4 h-4" />
           </button>

@@ -69,19 +69,39 @@ export default function Home() {
   const sortedAndFilteredItems = useMemo(() => {
     let resultItems: (FileItem | FolderItem)[] = [];
 
+    // Trash view
+    if (sidebarSection === "trash") {
+      const trashedFolders = folders.filter((f) => f.trashedAt);
+      const trashedItems = items.filter((i) => i.trashedAt);
+      resultItems = [...trashedFolders, ...trashedItems];
+      const typeOrder = ["folder", "image", "video", "link", "file"];
+      resultItems.sort((a, b) => {
+        const ta = "type" in a ? a.type : "folder";
+        const tb = "type" in b ? b.type : "folder";
+        const orderDiff = typeOrder.indexOf(ta) - typeOrder.indexOf(tb);
+        if (orderDiff !== 0) return orderDiff;
+        const aTime = (a as FileItem).trashedAt || a.createdAt;
+        const bTime = (b as FileItem).trashedAt || b.createdAt;
+        return bTime - aTime;
+      });
+    }
     // Global navigation vs Folder browsing
-    if (sidebarSection !== "all") {
+    else if (sidebarSection !== "all") {
       const isGlobal = sidebarSection.startsWith("global:");
       const type = isGlobal ? sidebarSection.slice(7) : sidebarSection;
       const scopeTarget = isGlobal ? "global" : "local";
       if (type === "all") {
-        const scopedFolders = folders.filter(
-          (f) => (f.scope === "global" ? "global" : "local") === scopeTarget
-        );
-        const scopedItems = items.filter(
-          (i: FileItem) =>
-            (i.scope === "global" ? "global" : "local") === scopeTarget
-        );
+        const scopedFolders = folders
+          .filter(
+            (f) => (f.scope === "global" ? "global" : "local") === scopeTarget
+          )
+          .filter((f) => !f.trashedAt);
+        const scopedItems = items
+          .filter(
+            (i: FileItem) =>
+              (i.scope === "global" ? "global" : "local") === scopeTarget
+          )
+          .filter((i) => !i.trashedAt);
         resultItems = [...scopedFolders, ...scopedItems];
         const typeOrder = ["folder", "image", "video", "link", "file"];
         resultItems.sort((a, b) => {
@@ -92,26 +112,34 @@ export default function Home() {
           return b.createdAt - a.createdAt;
         });
       } else if (type === "folder") {
-        resultItems = folders.filter(
-          (f) => (f.scope === "global" ? "global" : "local") === scopeTarget
-        );
+        resultItems = folders
+          .filter(
+            (f) => (f.scope === "global" ? "global" : "local") === scopeTarget
+          )
+          .filter((f) => !f.trashedAt);
       } else {
-        resultItems = items.filter(
-          (i) =>
-            i.type === (type as ItemType) &&
-            (i.scope === "global" ? "global" : "local") === scopeTarget
-        );
+        resultItems = items
+          .filter(
+            (i) =>
+              i.type === (type as ItemType) &&
+              (i.scope === "global" ? "global" : "local") === scopeTarget
+          )
+          .filter((i) => !i.trashedAt);
       }
     } else {
       // "All Files" logic
-      const currentFolders = folders.filter(
-        (f) =>
-          f.parentId === currentFolderId && (f.scope ?? "local") === "local"
-      );
-      const currentFiles = items.filter(
-        (i: FileItem) =>
-          i.parentId === currentFolderId && (i.scope ?? "local") === "local"
-      );
+      const currentFolders = folders
+        .filter(
+          (f) =>
+            f.parentId === currentFolderId && (f.scope ?? "local") === "local"
+        )
+        .filter((f) => !f.trashedAt);
+      const currentFiles = items
+        .filter(
+          (i: FileItem) =>
+            i.parentId === currentFolderId && (i.scope ?? "local") === "local"
+        )
+        .filter((i) => !i.trashedAt);
 
       // Merge for sorting
       resultItems = [...currentFolders, ...currentFiles];
@@ -157,21 +185,30 @@ export default function Home() {
   ]);
 
   const counts = useMemo(() => {
-    const baseItems: (FileItem | FolderItem)[] =
-      sidebarSection !== "all"
-        ? sortedAndFilteredItems
-        : [
-            ...folders.filter(
-              (f) =>
-                f.parentId === currentFolderId &&
-                (f.scope ?? "local") === "local"
-            ),
-            ...items.filter(
-              (i: FileItem) =>
-                i.parentId === currentFolderId &&
-                (i.scope ?? "local") === "local"
-            ),
-          ];
+    let baseItems: (FileItem | FolderItem)[] = [];
+    if (sidebarSection === "trash") {
+      baseItems = [
+        ...folders.filter((f) => f.trashedAt),
+        ...items.filter((i) => i.trashedAt),
+      ];
+    } else if (sidebarSection !== "all") {
+      baseItems = sortedAndFilteredItems;
+    } else {
+      baseItems = [
+        ...folders.filter(
+          (f) =>
+            f.parentId === currentFolderId &&
+            (f.scope ?? "local") === "local" &&
+            !f.trashedAt
+        ),
+        ...items.filter(
+          (i: FileItem) =>
+            i.parentId === currentFolderId &&
+            (i.scope ?? "local") === "local" &&
+            !i.trashedAt
+        ),
+      ];
+    }
 
     return {
       all: baseItems.length,
@@ -251,8 +288,13 @@ export default function Home() {
     setDeletingId(id);
     setTimeout(() => {
       if (type === "folder")
-        setFolders((prev) => prev.filter((f) => f.id !== id));
-      else setItems((prev) => prev.filter((i) => i.id !== id));
+        setFolders((prev) =>
+          prev.map((f) => (f.id === id ? { ...f, trashedAt: Date.now() } : f))
+        );
+      else
+        setItems((prev) =>
+          prev.map((i) => (i.id === id ? { ...i, trashedAt: Date.now() } : i))
+        );
       setDeletingId(null);
     }, 400);
   };

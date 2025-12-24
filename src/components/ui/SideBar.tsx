@@ -25,7 +25,7 @@ const MenuSection: React.FC<{
         <button
           key={item.id}
           onClick={() => onItemClick(item.id)}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+          className={`cursor-pointer w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
             isActive(item.id)
               ? "bg-blue-50 text-blue-700 shadow-sm"
               : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
@@ -85,8 +85,19 @@ const Sidebar: React.FC<SidebarProps> = ({
           <p className="px-3 text-[0.625rem] font-bold text-gray-400 uppercase tracking-widest mb-2">
             System
           </p>
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-50">
-            <ICONS.Trash className="w-5 h-5 text-gray-400" />
+          <button
+            onClick={() => setSection("trash")}
+            className={`cursor-pointer w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              currentSection === "trash"
+                ? "bg-blue-50 text-blue-700 shadow-sm"
+                : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+            }`}
+          >
+            <ICONS.Trash
+              className={`w-5 h-5 ${
+                currentSection === "trash" ? "text-blue-600" : "text-gray-400"
+              }`}
+            />
             Trash
           </button>
         </div>

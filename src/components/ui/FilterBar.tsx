@@ -27,7 +27,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
         <button
           key={filter.id}
           onClick={() => setActiveType(filter.id)}
-          className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap border transition-all flex items-center gap-2 ${
+          className={`cursor-pointer px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap border transition-all flex items-center gap-2 ${
             activeType === filter.id
               ? "bg-blue-600 border-blue-600 text-white shadow-md"
               : "bg-white border-gray-100 text-gray-500 hover:border-gray-300 hover:bg-gray-50"
