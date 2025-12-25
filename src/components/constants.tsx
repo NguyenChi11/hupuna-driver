@@ -377,7 +377,7 @@ export const ICONS = {
       <line x1="12" y1="15" x2="12" y2="3" />
     </svg>
   ),
-  Star: (props: React.SVGProps<SVGSVGElement>) => (
+  Play: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="24"
@@ -390,7 +390,7 @@ export const ICONS = {
       strokeLinejoin="round"
       {...props}
     >
-      <polygon points="12 2 15 8.5 22 9.5 17 14 18.5 21 12 17.5 5.5 21 7 14 2 9.5 9 8.5 12 2" />
+      <polygon points="5 3 19 12 5 21 5 3" />
     </svg>
   ),
 };

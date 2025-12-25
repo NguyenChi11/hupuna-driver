@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { useRouter } from "next/navigation";
 import AssetModal from "@/components/assets/AssetModal";
 import FilterBar from "@/components/ui/FilterBar";
 import Header from "@/components/ui/Header";
@@ -12,6 +13,7 @@ import SelectionToolbar from "@/components/drive/SelectionToolbar";
 import DriveContent from "@/components/drive/DriveContent";
 
 export default function Home() {
+  const router = useRouter();
   const {
     currentFolderId,
     folders,
@@ -84,6 +86,9 @@ export default function Home() {
           onSearch={setSearchText}
           onNew={() => setIsModalOpen(true)}
           onOpenSidebar={() => setIsMobileSidebarOpen(true)}
+          onLogout={() => {
+            router.push("/login");
+          }}
           onSubmitSearch={(q) => {
             setSearchText(q);
             setSearchQuery(q);

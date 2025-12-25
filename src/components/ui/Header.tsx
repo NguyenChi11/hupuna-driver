@@ -10,6 +10,7 @@ interface HeaderProps {
   searchResults?: (FileItem | FolderItem)[];
   onOpenResult?: (item: FileItem | FolderItem) => void;
   onSubmitSearch?: (q: string) => void;
+  onLogout?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -19,9 +20,12 @@ const Header: React.FC<HeaderProps> = ({
   searchResults = [],
   onOpenResult,
   onSubmitSearch,
+  onLogout,
 }) => {
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -32,12 +36,19 @@ const Header: React.FC<HeaderProps> = ({
       ) {
         setOpen(false);
       }
+      if (
+        userMenuOpen &&
+        userMenuRef.current &&
+        !userMenuRef.current.contains(e.target as Node)
+      ) {
+        setUserMenuOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => {
       document.removeEventListener("mousedown", handler);
     };
-  }, [open]);
+  }, [open, userMenuOpen]);
 
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between gap-4 px-4 md:px-6 sticky top-0 z-50">
@@ -150,9 +161,28 @@ const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* User avatar */}
-        <button className="cursor-pointer w-10 h-10 rounded-full bg-linear-to-tr from-blue-600 to-blue-400 flex items-center justify-center text-white font-bold text-sm shadow-md hover:shadow-lg transition">
-          JD
-        </button>
+        <div className="relative" ref={userMenuRef}>
+          <button
+            onClick={() => setUserMenuOpen((v) => !v)}
+            className="cursor-pointer w-10 h-10 rounded-full bg-linear-to-tr from-blue-600 to-blue-400 flex items-center justify-center text-white font-bold text-sm shadow-md hover:shadow-lg transition"
+          >
+            JD
+          </button>
+          {userMenuOpen && (
+            <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-xl shadow-2xl z-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  if (onLogout) onLogout();
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+              >
+                Đăng xuất
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
