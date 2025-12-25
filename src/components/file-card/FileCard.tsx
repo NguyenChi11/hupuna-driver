@@ -1,7 +1,7 @@
 "use client";
 
 import { FileCardProps } from "@/types/file-card";
-import { getItemType, getColorClasses, isFolder } from "@/utils/fileCard";
+import { getItemType, isFolder } from "@/utils/fileCard";
 import { useFileCard } from "@/hooks/useFileCard";
 import { FileCardIcon } from "./FileCardIcon";
 import { FileCardActions } from "./FileCardActions";
@@ -20,7 +20,6 @@ const FileCard = ({
   onSelect,
 }: FileCardProps) => {
   const type = getItemType(item);
-  const color = getColorClasses(type);
 
   const {
     isEditing,
@@ -35,22 +34,24 @@ const FileCard = ({
     <div
       data-id={item.id}
       onClick={(e) => {
-        if ((e.ctrlKey || e.shiftKey) && onSelect) {
+        if ((e.ctrlKey || e.metaKey || e.shiftKey) && onSelect) {
           onSelect(item.id, isFolder(item) ? "folder" : "item");
-        } else {
+        } else if (!isEditing) {
           onOpen(item);
         }
       }}
-      className={`group relative rounded-3xl p-5 ${color}`}
+      className={`
+        group relative bg-white rounded-2xl border border-transparent
+        hover:border-gray-300 hover:shadow-lg transition-all duration-200
+        ${isSelected ? "ring-2 ring-blue-500 border-blue-500 shadow-md" : ""}
+        ${isDeleting ? "opacity-60" : ""}
+      `}
     >
+      {/* Checkbox chọn */}
       {onSelect && (
         <FileCardSelect
           isSelected={isSelected}
-          className={
-            isSelected
-              ? "opacity-100"
-              : "opacity-0 group-hover:opacity-100 transition-opacity"
-          }
+          className="absolute top-3 left-3 z-10"
           onClick={(e) => {
             e.stopPropagation();
             onSelect(item.id, isFolder(item) ? "folder" : "item");
@@ -58,7 +59,8 @@ const FileCard = ({
         />
       )}
 
-      <FileCardIcon type={type}>
+      {/* Thumbnail / Icon area */}
+      <FileCardIcon type={type} item={item}>
         <FileCardActions
           item={item}
           onDelete={onDelete}
@@ -68,16 +70,22 @@ const FileCard = ({
         />
       </FileCardIcon>
 
-      <FileCardTitle
-        item={item}
-        isEditing={isEditing}
-        editedName={editedName}
-        setEditedName={setEditedName}
-        inputRef={inputRef}
-        onSubmit={() => submitRename(onRename)}
-      />
+      {/* Title */}
+      <div className="px-4 pb-4 mt-3">
+        <FileCardTitle
+          item={item}
+          isEditing={isEditing}
+          editedName={editedName}
+          setEditedName={setEditedName}
+          inputRef={inputRef}
+          onSubmit={() => submitRename(onRename)}
+        />
+      </div>
 
-      {isDeleting && <div className="absolute inset-0 bg-white/60" />}
+      {/* Overlay khi đang xóa */}
+      {isDeleting && (
+        <div className="absolute inset-0 bg-white/70 rounded-2xl" />
+      )}
     </div>
   );
 };

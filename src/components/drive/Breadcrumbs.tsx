@@ -23,49 +23,64 @@ export default function Breadcrumbs({
   onToggleSelectionMode,
   onClearSelection,
 }: BreadcrumbsProps) {
+  const getFolderName = () => {
+    if (sidebarSection !== "all") {
+      return sidebarSection.charAt(0).toUpperCase() + sidebarSection.slice(1);
+    }
+    return breadcrumbs[breadcrumbs.length - 1]?.name || "My Drive";
+  };
+
   return (
-    <div className="pt-8">
-      <nav className="flex items-center gap-1 text-[0.875rem] font-black text-gray-400 uppercase tracking-widest mb-1">
+    <div className="py-6">
+      {/* Breadcrumbs */}
+      <nav className="flex items-center gap-2 text-sm text-gray-600 mb-4">
         <button
           onClick={() => {
             onNavigate(null);
             onSidebarSectionChange("all");
           }}
-          className="hover:text-blue-600 transition-colors"
+          className="font-medium hover:text-blue-600 transition-colors"
         >
           My Drive
         </button>
-        {breadcrumbs.map((f) => (
-          <React.Fragment key={f.id}>
-            <ICONS.ChevronRight className="w-3 h-3 mx-1" />
+
+        {breadcrumbs.map((folder, index) => (
+          <React.Fragment key={folder.id}>
+            <ICONS.ChevronRight className="w-4 h-4 text-gray-400" />
             <button
-              onClick={() => onNavigate(f.id)}
-              className="hover:text-blue-600 transition-colors truncate max-w-30"
+              onClick={() => onNavigate(folder.id)}
+              className={`font-medium hover:text-blue-600 transition-colors ${
+                index === breadcrumbs.length - 1 ? "text-gray-900" : ""
+              }`}
             >
-              {f.name}
+              {folder.name}
             </button>
           </React.Fragment>
         ))}
       </nav>
-      <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 mb-6">
-        {sidebarSection !== "all"
-          ? sidebarSection.charAt(0).toUpperCase() + sidebarSection.slice(1)
-          : breadcrumbs[breadcrumbs.length - 1]?.name || "Drive Root"}
-      </h1>
-      <button
-        onClick={() => {
-          onToggleSelectionMode();
-          if (isSelectionMode) onClearSelection();
-        }}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-          isSelectionMode
-            ? "bg-blue-100 text-blue-700 font-bold"
-            : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
-        }`}
-      >
-        <ICONS.CheckSquare className="w-5 h-5" />
-        {isSelectionMode ? "Cancel Selection" : "Select Items"}
-      </button>
+
+      {/* Title */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+          {getFolderName()}
+        </h1>
+
+        {/* Select Button */}
+        <button
+          onClick={() => {
+            onToggleSelectionMode();
+            if (isSelectionMode) onClearSelection();
+          }}
+          className={`flex items-center gap-2.5 px-5 py-2.5 rounded-full font-medium transition-all shadow-sm hover:shadow ${
+            isSelectionMode
+              ? "bg-blue-600 text-white hover:bg-blue-700"
+              : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+          }`}
+        >
+          <ICONS.CheckSquare className="w-5 h-5" />
+          {isSelectionMode ? "Cancel" : "Select"}
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { ICONS } from "@/components/constants";
 
 interface SidebarProps {
@@ -16,29 +16,61 @@ const MenuSection: React.FC<{
   isActive: (id: string) => boolean;
   onItemClick: (id: string) => void;
 }> = ({ title, items, isActive, onItemClick }) => {
+  const [open, setOpen] = useState(true);
   return (
     <div className="space-y-1">
-      <p className="px-3 text-[0.625rem] font-bold text-gray-400 uppercase tracking-widest mb-2">
-        {title}
-      </p>
-      {items.map((item) => (
+      {title && (
         <button
-          key={item.id}
-          onClick={() => onItemClick(item.id)}
-          className={`cursor-pointer w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-            isActive(item.id)
-              ? "bg-blue-50 text-blue-700 shadow-sm"
-              : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-          }`}
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="cursor-pointer w-full px-6 py-2 text-sm font-medium text-gray-500 uppercase tracking-wider flex items-center justify-between hover:bg-gray-100 transition-colors rounded-lg"
         >
-          <item.icon
-            className={`w-5 h-5 ${
-              isActive(item.id) ? "text-blue-600" : "text-gray-400"
+          <span>{title}</span>
+          <ICONS.ChevronRight
+            className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${
+              open ? "rotate-90" : ""
             }`}
           />
-          {item.label}
         </button>
-      ))}
+      )}
+
+      {open &&
+        items.map((item) => {
+          const isItemActive = isActive(item.id);
+          return (
+            <button
+              key={item.id}
+              onClick={() => onItemClick(item.id)}
+              className={`
+                group relative w-full flex items-center gap-4 px-6 py-2.5 text-sm font-medium cursor-pointer
+                transition-colors duration-150 ease-in-out
+                ${
+                  isItemActive
+                    ? "bg-blue-50 text-blue-800 font-medium"
+                    : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                }
+                rounded-r-full
+              `}
+            >
+              {isItemActive && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-600 rounded-full" />
+              )}
+
+              <item.icon
+                className={`
+                  w-5 h-5 shrink-0 transition-colors
+                  ${
+                    isItemActive
+                      ? "text-blue-600"
+                      : "text-gray-600 group-hover:text-gray-800"
+                  }
+                `}
+              />
+
+              <span className="truncate">{item.label}</span>
+            </button>
+          );
+        })}
     </div>
   );
 };
@@ -64,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <ICONS.Cloud className="text-white w-6 h-6" />
         </div>
         <span className="font-bold text-xl text-gray-900 tracking-tight">
-          CorpDrive
+          HupunaDriver
         </span>
       </div>
       <nav className="flex-1 px-4 space-y-1">
@@ -81,26 +113,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           onItemClick={(id) => setSectionGlobal(`global:${id}`)}
         />
 
-        <div className="pt-6">
-          <p className="px-3 text-[0.625rem] font-bold text-gray-400 uppercase tracking-widest mb-2">
-            System
-          </p>
-          <button
-            onClick={() => setSection("trash")}
-            className={`cursor-pointer w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              currentSection === "trash"
-                ? "bg-blue-50 text-blue-700 shadow-sm"
-                : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-            }`}
-          >
-            <ICONS.Trash
-              className={`w-5 h-5 ${
-                currentSection === "trash" ? "text-blue-600" : "text-gray-400"
-              }`}
-            />
-            Trash
-          </button>
-        </div>
+        <MenuSection
+          title="System"
+          items={[{ id: "trash", label: "Trash", icon: ICONS.Trash }]}
+          isActive={(id) => currentSection === id}
+          onItemClick={(id) => setSection(id)}
+        />
       </nav>
     </div>
   );

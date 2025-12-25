@@ -82,9 +82,9 @@ export default function DriveContent({
         ].map((group) =>
           group.items.length > 0 ? (
             <div key={group.id} className="mt-8">
-              <div className="flex items-center gap-2 mb-4">
-                <group.icon className="w-4 h-4 text-gray-400" />
-                <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest">
+              <div className="flex items-center gap-3 mb-5">
+                {group.icon && <group.icon className="w-5 h-5 text-gray-500" />}
+                <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {group.label}
                 </h2>
               </div>

@@ -10,15 +10,19 @@ export const AssetSubmitButton = ({
 }: AssetSubmitProps) => {
   const disabled =
     isAnalyzing ||
-    (newType === "folder" ? !newName : !newName && !newUrl && files.length === 0);
+    (newType === "folder"
+      ? !newName
+      : !newName && !newUrl && files.length === 0);
 
   return (
     <button
       disabled={disabled}
       onClick={handleCreate}
-      className="w-full bg-blue-600 text-white py-5 rounded-xl font-black disabled:opacity-50 disabled:cursor-not-allowed"
+      className="cursor-pointer w-full py-4 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all"
     >
-      {isAnalyzing ? "Processing..." : `Create ${newType}`}
+      {isAnalyzing
+        ? "Processing..."
+        : `Create ${newType === "folder" ? "folder" : newType}`}
     </button>
   );
 };

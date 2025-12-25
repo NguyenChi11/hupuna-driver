@@ -65,7 +65,7 @@ export const useDrive = () => {
     return path;
   }, [currentFolderId, folders]);
 
-  const sortedAndFilteredItems = useMemo(() => {
+  const baseItems = useMemo(() => {
     let resultItems: (FileItem | FolderItem)[] = [];
 
     // Trash view
@@ -73,16 +73,6 @@ export const useDrive = () => {
       const trashedFolders = folders.filter((f) => f.trashedAt);
       const trashedItems = items.filter((i) => i.trashedAt);
       resultItems = [...trashedFolders, ...trashedItems];
-      const typeOrder = ["folder", "image", "video", "link", "file"];
-      resultItems.sort((a, b) => {
-        const ta = "type" in a ? a.type : "folder";
-        const tb = "type" in b ? b.type : "folder";
-        const orderDiff = typeOrder.indexOf(ta) - typeOrder.indexOf(tb);
-        if (orderDiff !== 0) return orderDiff;
-        const aTime = (a as FileItem).trashedAt || a.createdAt;
-        const bTime = (b as FileItem).trashedAt || b.createdAt;
-        return bTime - aTime;
-      });
     }
     // Global navigation vs Folder browsing
     else if (sidebarSection !== "all") {
@@ -102,14 +92,6 @@ export const useDrive = () => {
           )
           .filter((i) => !i.trashedAt);
         resultItems = [...scopedFolders, ...scopedItems];
-        const typeOrder = ["folder", "image", "video", "link", "file"];
-        resultItems.sort((a, b) => {
-          const typeA = "type" in a ? a.type : "folder";
-          const typeB = "type" in b ? b.type : "folder";
-          const orderDiff = typeOrder.indexOf(typeA) - typeOrder.indexOf(typeB);
-          if (orderDiff !== 0) return orderDiff;
-          return b.createdAt - a.createdAt;
-        });
       } else if (type === "folder") {
         resultItems = folders
           .filter(
@@ -141,27 +123,26 @@ export const useDrive = () => {
       } else {
         resultItems = [...currentFolders, ...currentFiles];
       }
-
-      const typeOrder = ["folder", "image", "video", "link", "file"];
-      resultItems.sort((a, b) => {
-        const typeA = "type" in a ? a.type : "folder";
-        const typeB = "type" in b ? b.type : "folder";
-        const orderDiff = typeOrder.indexOf(typeA) - typeOrder.indexOf(typeB);
-        if (orderDiff !== 0) return orderDiff;
-        return b.createdAt - a.createdAt;
-      });
     }
+    return resultItems;
+  }, [currentFolderId, folders, items, sidebarSection]);
 
-    // Search filter
+  const searchedItems = useMemo(() => {
+    let result = baseItems;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      resultItems = resultItems.filter(
+      result = result.filter(
         (item: FileItem | FolderItem) =>
           item.name.toLowerCase().includes(q) ||
           ("tags" in item &&
             item.tags?.some((t) => t.toLowerCase().includes(q)))
       );
     }
+    return result;
+  }, [baseItems, searchQuery]);
+
+  const sortedAndFilteredItems = useMemo(() => {
+    let resultItems = searchedItems;
 
     // Contextual Navigation Filter (Horizontal bar)
     if (activeType !== "all") {
@@ -171,51 +152,43 @@ export const useDrive = () => {
       });
     }
 
+    // Sorting
+    const typeOrder = ["folder", "image", "video", "link", "file"];
+    resultItems.sort((a, b) => {
+      if (sidebarSection === "trash") {
+        const ta = "type" in a ? a.type : "folder";
+        const tb = "type" in b ? b.type : "folder";
+        const orderDiff = typeOrder.indexOf(ta) - typeOrder.indexOf(tb);
+        if (orderDiff !== 0) return orderDiff;
+        const aTime = (a as FileItem).trashedAt || a.createdAt;
+        const bTime = (b as FileItem).trashedAt || b.createdAt;
+        return bTime - aTime;
+      } else {
+        const typeA = "type" in a ? a.type : "folder";
+        const typeB = "type" in b ? b.type : "folder";
+        const orderDiff = typeOrder.indexOf(typeA) - typeOrder.indexOf(typeB);
+        if (orderDiff !== 0) return orderDiff;
+        return b.createdAt - a.createdAt;
+      }
+    });
+
     return resultItems;
-  }, [
-    currentFolderId,
-    folders,
-    items,
-    sidebarSection,
-    searchQuery,
-    activeType,
-  ]);
+  }, [searchedItems, activeType, sidebarSection]);
 
   const counts = useMemo(() => {
-    let baseItems: (FileItem | FolderItem)[] = [];
-    if (sidebarSection === "trash") {
-      baseItems = [
-        ...folders.filter((f) => f.trashedAt),
-        ...items.filter((i) => i.trashedAt),
-      ];
-    } else if (sidebarSection !== "all") {
-      baseItems = sortedAndFilteredItems;
-    } else {
-      baseItems = [
-        ...folders.filter(
-          (f) =>
-            f.parentId === currentFolderId &&
-            (f.scope ?? "local") === "local" &&
-            !f.trashedAt
-        ),
-        ...items.filter(
-          (i: FileItem) =>
-            i.parentId === currentFolderId &&
-            (i.scope ?? "local") === "local" &&
-            !i.trashedAt
-        ),
-      ];
-    }
-
     return {
-      all: baseItems.length,
-      folder: baseItems.filter((i) => !("type" in i)).length,
-      image: baseItems.filter((i) => "type" in i && i.type === "image").length,
-      video: baseItems.filter((i) => "type" in i && i.type === "video").length,
-      link: baseItems.filter((i) => "type" in i && i.type === "link").length,
-      file: baseItems.filter((i) => "type" in i && i.type === "file").length,
+      all: searchedItems.length,
+      folder: searchedItems.filter((i) => !("type" in i)).length,
+      image: searchedItems.filter((i) => "type" in i && i.type === "image")
+        .length,
+      video: searchedItems.filter((i) => "type" in i && i.type === "video")
+        .length,
+      link: searchedItems.filter((i) => "type" in i && i.type === "link")
+        .length,
+      file: searchedItems.filter((i) => "type" in i && i.type === "file")
+        .length,
     };
-  }, [currentFolderId, folders, items, sidebarSection, sortedAndFilteredItems]);
+  }, [searchedItems]);
 
   const handleCreate = async () => {
     if (newType === "folder" && !newName) return;

@@ -83,7 +83,7 @@ export default function Home() {
         />
 
         <div
-          className="flex-1 overflow-y-auto custom-scrollbar pb-20 px-8 relative"
+          className="flex-1 overflow-y-auto custom-scrollbar pb-20 px-4 md:px-8 relative"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}

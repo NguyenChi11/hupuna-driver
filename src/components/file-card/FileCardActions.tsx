@@ -20,25 +20,30 @@ export const FileCardActions = ({
   const folder = isFolder(item);
 
   return (
-    <div className="opacity-0 group-hover:opacity-100 flex gap-1">
+    <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 shadow-md">
       {onDownload && !folder && (
         <button
           onClick={(e) => {
             e.stopPropagation();
             onDownload(item);
           }}
+          className="p-2 rounded-full hover:bg-gray-100 transition"
+          title="Download"
         >
-          <ICONS.Download className="w-4 h-4" />
+          <ICONS.Download className="w-4 h-4 text-gray-700" />
         </button>
       )}
+
       {onRestore ? (
         <button
           onClick={(e) => {
             e.stopPropagation();
             onRestore(item.id, folder ? "folder" : "item");
           }}
+          className="p-2 rounded-full hover:bg-gray-100 transition"
+          title="Restore"
         >
-          <ICONS.Restore className="w-4 h-4" />
+          <ICONS.Restore className="w-4 h-4 text-gray-700" />
         </button>
       ) : (
         <button
@@ -46,17 +51,22 @@ export const FileCardActions = ({
             e.stopPropagation();
             onEdit();
           }}
+          className="p-2 rounded-full hover:bg-gray-100 transition"
+          title="Rename"
         >
-          <ICONS.Edit className="w-4 h-4" />
+          <ICONS.Edit className="w-4 h-4 text-gray-700" />
         </button>
       )}
+
       <button
         onClick={(e) => {
           e.stopPropagation();
           onDelete(item.id, folder ? "folder" : "item");
         }}
+        className="p-2 rounded-full hover:bg-gray-100 transition"
+        title="Delete"
       >
-        <ICONS.Trash className="w-4 h-4" />
+        <ICONS.Trash className="w-4 h-4 text-gray-700" />
       </button>
     </div>
   );

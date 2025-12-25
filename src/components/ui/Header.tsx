@@ -9,39 +9,55 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ onSearch, onNew, onOpenSidebar }) => {
   return (
-    <header className="py-4 bg-white/80 backdrop-blur-md border-b border-gray-100 flex md:flex-row flex-col items-center justify-between px-4 md:px-8 sticky top-0 z-20 gap-4 ">
-      <div className="flex items-center gap-3 md:gap-0 flex-1 max-w-2xl relative group w-full">
+    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between gap-4 px-4 md:px-6 sticky top-0 z-50">
+      {/* Left: Menu (mobile) + Logo + Search */}
+      <div className="flex items-center gap-4 flex-1 max-w-4xl">
         {onOpenSidebar && (
           <button
             onClick={onOpenSidebar}
-            className="md:hidden cursor-pointer p-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 active:scale-95 transition"
+            className="cursor-pointer md:hidden p-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition"
             aria-label="Open sidebar"
-            title="Open sidebar"
           >
-            <ICONS.Menu className="w-5 h-5" />
+            <ICONS.Menu className="w-6 h-6 text-gray-700" />
           </button>
         )}
-        <ICONS.Search className="absolute md:left-4 left-16 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors w-5 h-5" />
-        <input
-          type="text"
-          placeholder="Search corporate drive..."
-          onChange={(e) => onSearch(e.target.value)}
-          className="w-full bg-gray-100/50 border border-transparent rounded-2xl pl-12 pr-4 py-3 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-200 transition-all text-sm font-medium"
-        />
+
+        {/* Search bar - kiểu Google Drive */}
+        <div className="flex-1 max-w-3xl">
+          <div className="relative">
+            <ICONS.Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search corporate drive..."
+              onChange={(e) => onSearch(e.target.value)}
+              className="w-full h-12 pl-12 pr-4 bg-gray-100 hover:bg-gray-150 focus:bg-white rounded-3xl border border-transparent focus:border-blue-500 focus:outline-none focus:shadow-md transition-all text-base"
+            />
+          </div>
+        </div>
       </div>
-      <div className="flex items-center gap-6 w-full justify-end md:w-1/3">
+
+      {/* Right: New button + Avatar */}
+      <div className="flex items-center gap-4">
         <button
           onClick={onNew}
-          className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-2xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-blue-200 active:scale-95"
+          className="cursor-pointer hidden md:flex items-center gap-2 px-6 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-full font-medium shadow-sm hover:shadow transition-all"
         >
           <ICONS.Plus className="w-5 h-5" />
           <span>New Asset</span>
         </button>
-        <div className="flex items-center gap-3 pl-6 border-l border-gray-100">
-          <div className="h-10 w-10 rounded-2xl bg-linear-to-tr from-blue-600 to-blue-400 flex items-center justify-center text-white font-bold text-sm shadow-md">
-            JD
-          </div>
-        </div>
+
+        {/* Mobile New button - có thể dùng FAB riêng, nhưng giữ đơn giản */}
+        <button
+          onClick={onNew}
+          className="cursor-pointer md:hidden p-3 bg-blue-600 text-white rounded-full shadow-lg hover:shadow-xl transition"
+        >
+          <ICONS.Plus className="w-6 h-6" />
+        </button>
+
+        {/* User avatar */}
+        <button className="cursor-pointer w-10 h-10 rounded-full bg-linear-to-tr from-blue-600 to-blue-400 flex items-center justify-center text-white font-bold text-sm shadow-md hover:shadow-lg transition">
+          JD
+        </button>
       </div>
     </header>
   );
