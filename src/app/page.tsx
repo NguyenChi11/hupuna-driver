@@ -31,6 +31,17 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(
+    null
+  );
+  const [dragCurrent, setDragCurrent] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const initialSelectionRef = React.useRef<Set<string>>(new Set());
 
   // Persistence
   useEffect(() => {
@@ -287,14 +298,38 @@ export default function Home() {
   const handleDelete = (id: string, type: "item" | "folder") => {
     setDeletingId(id);
     setTimeout(() => {
-      if (type === "folder")
+      if (sidebarSection === "trash") {
+        // Permanent delete
+        if (type === "folder")
+          setFolders((prev) => prev.filter((f) => f.id !== id));
+        else setItems((prev) => prev.filter((i) => i.id !== id));
+      } else {
+        // Move to trash
+        if (type === "folder")
+          setFolders((prev) =>
+            prev.map((f) => (f.id === id ? { ...f, trashedAt: Date.now() } : f))
+          );
+        else
+          setItems((prev) =>
+            prev.map((i) => (i.id === id ? { ...i, trashedAt: Date.now() } : i))
+          );
+      }
+      setDeletingId(null);
+    }, 400);
+  };
+
+  const handleRestore = (id: string, type: "item" | "folder") => {
+    setDeletingId(id);
+    setTimeout(() => {
+      if (type === "folder") {
         setFolders((prev) =>
-          prev.map((f) => (f.id === id ? { ...f, trashedAt: Date.now() } : f))
+          prev.map((f) => (f.id === id ? { ...f, trashedAt: undefined } : f))
         );
-      else
+      } else {
         setItems((prev) =>
-          prev.map((i) => (i.id === id ? { ...i, trashedAt: Date.now() } : i))
+          prev.map((i) => (i.id === id ? { ...i, trashedAt: undefined } : i))
         );
+      }
       setDeletingId(null);
     }, 400);
   };
@@ -331,6 +366,121 @@ export default function Home() {
     }
   };
 
+  const handleSelect = (id: string) => {
+    setSelectedItems((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedItems.size === 0) return;
+
+    if (sidebarSection === "trash") {
+      // Permanent delete
+      setFolders((prev) => prev.filter((f) => !selectedItems.has(f.id)));
+      setItems((prev) => prev.filter((i) => !selectedItems.has(i.id)));
+    } else {
+      // Move to trash
+      const now = Date.now();
+      setFolders((prev) =>
+        prev.map((f) =>
+          selectedItems.has(f.id) ? { ...f, trashedAt: now } : f
+        )
+      );
+      setItems((prev) =>
+        prev.map((i) =>
+          selectedItems.has(i.id) ? { ...i, trashedAt: now } : i
+        )
+      );
+    }
+    setSelectedItems(new Set());
+    setIsSelectionMode(false);
+  };
+
+  const handleBulkRestore = () => {
+    if (selectedItems.size === 0) return;
+
+    setFolders((prev) =>
+      prev.map((f) =>
+        selectedItems.has(f.id) ? { ...f, trashedAt: undefined } : f
+      )
+    );
+    setItems((prev) =>
+      prev.map((i) =>
+        selectedItems.has(i.id) ? { ...i, trashedAt: undefined } : i
+      )
+    );
+    setSelectedItems(new Set());
+    setIsSelectionMode(false);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Check if target is interactive (button, input, link)
+    if ((e.target as HTMLElement).closest("button, input, a")) return;
+
+    // Don't start selection box if clicking on an item (allow for future drag-and-drop)
+    if ((e.target as HTMLElement).closest("[data-id]")) return;
+
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setDragCurrent({ x: e.clientX, y: e.clientY });
+
+    // If shift/ctrl is not pressed, clear previous selection
+    if (!e.shiftKey && !e.ctrlKey) {
+      setSelectedItems(new Set());
+      initialSelectionRef.current = new Set();
+    } else {
+      initialSelectionRef.current = new Set(selectedItems);
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !dragStart) return;
+
+    if (!isSelectionMode) setIsSelectionMode(true);
+
+    setDragCurrent({ x: e.clientX, y: e.clientY });
+
+    // Calculate selection rect
+    const selectionRect = {
+      left: Math.min(dragStart.x, e.clientX),
+      top: Math.min(dragStart.y, e.clientY),
+      width: Math.abs(e.clientX - dragStart.x),
+      height: Math.abs(e.clientY - dragStart.y),
+    };
+
+    // Find intersecting items
+    const newSelected = new Set(initialSelectionRef.current);
+
+    document.querySelectorAll("[data-id]").forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      const isIntersecting = !(
+        rect.right < selectionRect.left ||
+        rect.left > selectionRect.left + selectionRect.width ||
+        rect.bottom < selectionRect.top ||
+        rect.top > selectionRect.top + selectionRect.height
+      );
+
+      if (isIntersecting) {
+        newSelected.add(el.getAttribute("data-id")!);
+      }
+    });
+
+    setSelectedItems(newSelected);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setDragStart(null);
+    setDragCurrent(null);
+  };
+
   return (
     <div className="flex h-screen bg-[#FDFDFF] overflow-hidden">
       <Sidebar
@@ -350,7 +500,24 @@ export default function Home() {
       <main className="flex-1 flex flex-col min-w-0 bg-white md:rounded-l-[2.5rem] shadow-2xl relative overflow-hidden">
         <Header onSearch={setSearchQuery} onNew={() => setIsModalOpen(true)} />
 
-        <div className="flex-1 overflow-y-auto no-scrollbar pb-20 px-8">
+        <div
+          className="flex-1 overflow-y-auto no-scrollbar pb-20 px-8 relative"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          {isDragging && dragStart && dragCurrent && (
+            <div
+              className="fixed border border-blue-500 bg-blue-500/20 z-50 pointer-events-none"
+              style={{
+                left: Math.min(dragStart.x, dragCurrent.x),
+                top: Math.min(dragStart.y, dragCurrent.y),
+                width: Math.abs(dragCurrent.x - dragStart.x),
+                height: Math.abs(dragCurrent.y - dragStart.y),
+              }}
+            />
+          )}
           <div className="max-w-7xl mx-auto">
             {/* Breadcrumbs & Title */}
             <div className="pt-8">
@@ -382,7 +549,57 @@ export default function Home() {
                     sidebarSection.slice(1)
                   : breadcrumbs[breadcrumbs.length - 1]?.name || "Drive Root"}
               </h1>
+              <button
+                onClick={() => {
+                  setIsSelectionMode(!isSelectionMode);
+                  if (isSelectionMode) setSelectedItems(new Set());
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
+                  isSelectionMode
+                    ? "bg-blue-100 text-blue-700 font-bold"
+                    : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+                }`}
+              >
+                <ICONS.CheckSquare className="w-5 h-5" />
+                {isSelectionMode ? "Cancel Selection" : "Select Items"}
+              </button>
             </div>
+
+            {/* Selection Toolbar */}
+            {selectedItems.size > 0 && (
+              <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-white shadow-2xl border border-gray-100 rounded-full px-6 py-3 flex items-center gap-4 z-50 animate-in slide-in-from-bottom-4 duration-200">
+                <span className="text-sm font-bold text-gray-700">
+                  {selectedItems.size} selected
+                </span>
+                <div className="h-4 w-px bg-gray-200" />
+                {sidebarSection === "trash" && (
+                  <button
+                    onClick={handleBulkRestore}
+                    className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-green-600 transition-colors"
+                  >
+                    <ICONS.Restore className="w-5 h-5" />
+                    Restore
+                  </button>
+                )}
+                <button
+                  onClick={handleBulkDelete}
+                  className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-red-600 transition-colors"
+                >
+                  <ICONS.Trash className="w-5 h-5" />
+                  {sidebarSection === "trash" ? "Delete Forever" : "Delete"}
+                </button>
+                <div className="h-4 w-px bg-gray-200" />
+                <button
+                  onClick={() => {
+                    setSelectedItems(new Set());
+                    setIsSelectionMode(false);
+                  }}
+                  className="text-sm font-bold text-gray-500 hover:text-gray-900"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
 
             {/* Contextual Horizontal Filter */}
             <FilterBar
@@ -454,12 +671,24 @@ export default function Home() {
                           <FileCard
                             key={item.id}
                             item={item}
-                            onOpen={(item: unknown) =>
-                              handleOpen(item as FileItem | FolderItem)
-                            }
+                            onOpen={(item: unknown) => {
+                              if (isSelectionMode) {
+                                handleSelect(
+                                  (item as FileItem | FolderItem).id
+                                );
+                              } else {
+                                handleOpen(item as FileItem | FolderItem);
+                              }
+                            }}
                             onDelete={handleDelete}
                             onRename={handleRename}
                             isDeleting={deletingId === item.id}
+                            isSelected={selectedItems.has(item.id)}
+                            onSelect={
+                              isSelectionMode
+                                ? () => handleSelect(item.id)
+                                : undefined
+                            }
                           />
                         ))}
                       </div>
@@ -481,18 +710,133 @@ export default function Home() {
                   </div>
                 )}
               </>
+            ) : sidebarSection === "trash" ? (
+              <>
+                {(() => {
+                  const localItems = sortedAndFilteredItems.filter(
+                    (i) => (i.scope ?? "local") === "local"
+                  );
+                  const globalItems = sortedAndFilteredItems.filter(
+                    (i) => i.scope === "global"
+                  );
+
+                  if (localItems.length === 0 && globalItems.length === 0) {
+                    return (
+                      <div className="col-span-full py-32 flex flex-col items-center justify-center text-center opacity-60">
+                        <div className="bg-gray-50 p-8 rounded-[2.5rem] mb-6 border border-gray-100">
+                          <ICONS.Cloud className="w-16 h-16 text-gray-200" />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900">
+                          No assets found
+                        </h3>
+                        <p className="text-sm text-gray-500 max-w-xs mx-auto mt-2">
+                          Trash is empty.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      {localItems.length > 0 && (
+                        <div className="mt-8">
+                          <div className="flex items-center gap-2 mb-4">
+                            <ICONS.Folder className="w-4 h-4 text-gray-400" />
+                            <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest">
+                              Folder
+                            </h2>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                            {localItems.map((item) => (
+                              <FileCard
+                                key={item.id}
+                                item={item}
+                                onOpen={(item: unknown) => {
+                                  if (isSelectionMode) {
+                                    handleSelect(
+                                      (item as FileItem | FolderItem).id
+                                    );
+                                  } else {
+                                    handleOpen(item as FileItem | FolderItem);
+                                  }
+                                }}
+                                onDelete={handleDelete}
+                                onRename={handleRename}
+                                onRestore={handleRestore}
+                                isDeleting={deletingId === item.id}
+                                isSelected={selectedItems.has(item.id)}
+                                onSelect={
+                                  isSelectionMode
+                                    ? () => handleSelect(item.id)
+                                    : undefined
+                                }
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {globalItems.length > 0 && (
+                        <div className="mt-8">
+                          <div className="flex items-center gap-2 mb-4">
+                            <ICONS.Folder className="w-4 h-4 text-gray-400" />
+                            <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest">
+                              Folder Global
+                            </h2>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                            {globalItems.map((item) => (
+                              <FileCard
+                                key={item.id}
+                                item={item}
+                                onOpen={(item: unknown) => {
+                                  if (isSelectionMode) {
+                                    handleSelect(
+                                      (item as FileItem | FolderItem).id
+                                    );
+                                  } else {
+                                    handleOpen(item as FileItem | FolderItem);
+                                  }
+                                }}
+                                onDelete={handleDelete}
+                                onRename={handleRename}
+                                onRestore={handleRestore}
+                                isDeleting={deletingId === item.id}
+                                isSelected={selectedItems.has(item.id)}
+                                onSelect={
+                                  isSelectionMode
+                                    ? () => handleSelect(item.id)
+                                    : undefined
+                                }
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </>
             ) : (
               <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
                 {sortedAndFilteredItems.map((item: FileItem | FolderItem) => (
                   <FileCard
                     key={item.id}
                     item={item}
-                    onOpen={(item: unknown) =>
-                      handleOpen(item as FileItem | FolderItem)
-                    }
+                    onOpen={(item: unknown) => {
+                      if (isSelectionMode) {
+                        handleSelect((item as FileItem | FolderItem).id);
+                      } else {
+                        handleOpen(item as FileItem | FolderItem);
+                      }
+                    }}
                     onDelete={handleDelete}
                     onRename={handleRename}
                     isDeleting={deletingId === item.id}
+                    isSelected={selectedItems.has(item.id)}
+                    onSelect={
+                      isSelectionMode ? () => handleSelect(item.id) : undefined
+                    }
                   />
                 ))}
                 {sortedAndFilteredItems.length === 0 && (
