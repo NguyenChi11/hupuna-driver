@@ -8,6 +8,7 @@ interface FileCardProps {
   onDelete: (id: string, type: "item" | "folder") => void;
   onRename: (id: string, newName: string, type: "item" | "folder") => void;
   onRestore?: (id: string, type: "item" | "folder") => void;
+  onDownload?: (item: FileItem | FolderItem) => void;
   isDeleting: boolean;
   isSelected?: boolean;
   onSelect?: (id: string, type: "item" | "folder") => void;
@@ -19,6 +20,7 @@ const FileCard: React.FC<FileCardProps> = ({
   onDelete,
   onRename,
   onRestore,
+  onDownload,
   isDeleting,
   isSelected,
   onSelect,
@@ -140,6 +142,18 @@ const FileCard: React.FC<FileCardProps> = ({
           <Icon className="w-8 h-8" />
         </div>
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+          {onDownload && !isFolder && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDownload(item);
+              }}
+              className="cursor-pointer p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+              title="Download"
+            >
+              <ICONS.Download className="w-4 h-4" />
+            </button>
+          )}
           {onRestore ? (
             <button
               onClick={(e) => {

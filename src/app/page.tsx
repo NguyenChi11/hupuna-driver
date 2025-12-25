@@ -4,6 +4,7 @@ import AssetModal from "@/components/ui/AssetModal";
 import FileCard from "@/components/ui/FileCard";
 import FilterBar from "@/components/ui/FilterBar";
 import Header from "@/components/ui/Header";
+import MobileSidebar from "@/components/ui/MobileSidebar";
 import Sidebar from "@/components/ui/SideBar";
 import React from "react";
 import { FileItem, FolderItem, ItemType } from "@/types/types";
@@ -33,6 +34,7 @@ export default function Home() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(
     null
@@ -420,6 +422,48 @@ export default function Home() {
     setIsSelectionMode(false);
   };
 
+  const handleDownload = (item: FileItem | FolderItem) => {
+    if ("type" in item && item.url) {
+      const link = document.createElement("a");
+      link.href = item.url;
+      link.download = item.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      alert("Folder download is not supported yet.");
+    }
+  };
+
+  const handleBulkDownload = () => {
+    if (selectedItems.size === 0) return;
+
+    let downloadCount = 0;
+    items.forEach((item) => {
+      if (selectedItems.has(item.id)) {
+        if (item.url) {
+          downloadCount++;
+          // Add a small delay between downloads to prevent browser blocking
+          setTimeout(() => {
+            const link = document.createElement("a");
+            link.href = item.url!;
+            link.download = item.name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }, downloadCount * 500);
+        }
+      }
+    });
+
+    if (downloadCount === 0) {
+      alert("No downloadable files selected.");
+    } else {
+      setSelectedItems(new Set());
+      setIsSelectionMode(false);
+    }
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
     // Check if target is interactive (button, input, link)
     if ((e.target as HTMLElement).closest("button, input, a")) return;
@@ -498,10 +542,14 @@ export default function Home() {
       />
 
       <main className="flex-1 flex flex-col min-w-0 bg-white md:rounded-l-[2.5rem] shadow-2xl relative overflow-hidden">
-        <Header onSearch={setSearchQuery} onNew={() => setIsModalOpen(true)} />
+        <Header
+          onSearch={setSearchQuery}
+          onNew={() => setIsModalOpen(true)}
+          onOpenSidebar={() => setIsMobileSidebarOpen(true)}
+        />
 
         <div
-          className="flex-1 overflow-y-auto no-scrollbar pb-20 px-8 relative"
+          className="flex-1 overflow-y-auto custom-scrollbar pb-20 px-8 relative"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -518,7 +566,9 @@ export default function Home() {
               }}
             />
           )}
-          <div className="max-w-7xl mx-auto">
+          <div
+            className={`max-w-7xl mx-auto ${isDragging ? "select-none" : ""}`}
+          >
             {/* Breadcrumbs & Title */}
             <div className="pt-8">
               <nav className="flex items-center gap-1 text-[0.875rem] font-black text-gray-400 uppercase tracking-widest mb-1">
@@ -579,6 +629,15 @@ export default function Home() {
                   >
                     <ICONS.Restore className="w-5 h-5" />
                     Restore
+                  </button>
+                )}
+                {sidebarSection !== "trash" && (
+                  <button
+                    onClick={handleBulkDownload}
+                    className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-blue-600 transition-colors"
+                  >
+                    <ICONS.Download className="w-5 h-5" />
+                    Download
                   </button>
                 )}
                 <button
@@ -682,6 +741,7 @@ export default function Home() {
                             }}
                             onDelete={handleDelete}
                             onRename={handleRename}
+                            onDownload={handleDownload}
                             isDeleting={deletingId === item.id}
                             isSelected={selectedItems.has(item.id)}
                             onSelect={
@@ -763,6 +823,7 @@ export default function Home() {
                                 onDelete={handleDelete}
                                 onRename={handleRename}
                                 onRestore={handleRestore}
+                                onDownload={handleDownload}
                                 isDeleting={deletingId === item.id}
                                 isSelected={selectedItems.has(item.id)}
                                 onSelect={
@@ -801,6 +862,7 @@ export default function Home() {
                                 onDelete={handleDelete}
                                 onRename={handleRename}
                                 onRestore={handleRestore}
+                                onDownload={handleDownload}
                                 isDeleting={deletingId === item.id}
                                 isSelected={selectedItems.has(item.id)}
                                 onSelect={
@@ -818,27 +880,41 @@ export default function Home() {
                 })()}
               </>
             ) : (
-              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                {sortedAndFilteredItems.map((item: FileItem | FolderItem) => (
-                  <FileCard
-                    key={item.id}
-                    item={item}
-                    onOpen={(item: unknown) => {
-                      if (isSelectionMode) {
-                        handleSelect((item as FileItem | FolderItem).id);
-                      } else {
-                        handleOpen(item as FileItem | FolderItem);
+              <>
+                <div className="flex items-center gap-2 mb-6">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    {sidebarSection.charAt(0).toUpperCase() +
+                      sidebarSection.slice(1)}
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs font-bold text-gray-500">
+                    {sortedAndFilteredItems.length}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                  {sortedAndFilteredItems.map((item: FileItem | FolderItem) => (
+                    <FileCard
+                      key={item.id}
+                      item={item}
+                      onOpen={(item: unknown) => {
+                        if (isSelectionMode) {
+                          handleSelect((item as FileItem | FolderItem).id);
+                        } else {
+                          handleOpen(item as FileItem | FolderItem);
+                        }
+                      }}
+                      onDelete={handleDelete}
+                      onRename={handleRename}
+                      onDownload={handleDownload}
+                      isDeleting={deletingId === item.id}
+                      isSelected={selectedItems.has(item.id)}
+                      onSelect={
+                        isSelectionMode
+                          ? () => handleSelect(item.id)
+                          : undefined
                       }
-                    }}
-                    onDelete={handleDelete}
-                    onRename={handleRename}
-                    isDeleting={deletingId === item.id}
-                    isSelected={selectedItems.has(item.id)}
-                    onSelect={
-                      isSelectionMode ? () => handleSelect(item.id) : undefined
-                    }
-                  />
-                ))}
+                    />
+                  ))}
+                </div>
                 {sortedAndFilteredItems.length === 0 && (
                   <div className="col-span-full py-32 flex flex-col items-center justify-center text-center opacity-60">
                     <div className="bg-gray-50 p-8 rounded-[2.5rem] mb-6 border border-gray-100">
@@ -853,10 +929,25 @@ export default function Home() {
                     </p>
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         </div>
+        <MobileSidebar
+          isOpen={isMobileSidebarOpen}
+          onClose={() => setIsMobileSidebarOpen(false)}
+          currentSection={sidebarSection}
+          setSection={(s) => {
+            setSidebarSection(s);
+            setCurrentFolderId(null);
+            setActiveType("all");
+          }}
+          setSectionGlobal={(s) => {
+            setSidebarSection(s);
+            setCurrentFolderId(null);
+            setActiveType("all");
+          }}
+        />
       </main>
 
       {/* Modal for New Asset */}
