@@ -14,6 +14,8 @@ import DriveContent from "@/components/drive/DriveContent";
 export default function Home() {
   const {
     currentFolderId,
+    folders,
+    items,
     sidebarSection,
     activeType,
     isModalOpen,
@@ -59,6 +61,7 @@ export default function Home() {
     handleMouseMove,
     handleMouseUp,
   } = useDrive();
+  const [searchText, setSearchText] = React.useState("");
 
   return (
     <div className="flex h-screen bg-[#FDFDFF] overflow-hidden">
@@ -78,9 +81,44 @@ export default function Home() {
 
       <main className="flex-1 flex flex-col min-w-0 bg-white md:rounded-l-[2.5rem] shadow-2xl relative overflow-hidden">
         <Header
-          onSearch={setSearchQuery}
+          onSearch={setSearchText}
           onNew={() => setIsModalOpen(true)}
           onOpenSidebar={() => setIsMobileSidebarOpen(true)}
+          onSubmitSearch={(q) => {
+            setSearchText(q);
+            setSearchQuery(q);
+            setSidebarSection("all");
+            setActiveType("all");
+          }}
+          searchResults={
+            (searchText || "").trim().length > 0
+              ? [
+                  ...folders.filter(
+                    (f) =>
+                      !f.trashedAt &&
+                      f.name
+                        .toLowerCase()
+                        .includes((searchText || "").toLowerCase())
+                  ),
+                  ...items.filter(
+                    (i) =>
+                      !i.trashedAt &&
+                      (i.name
+                        .toLowerCase()
+                        .includes((searchText || "").toLowerCase()) ||
+                        i.tags?.some((t) =>
+                          t
+                            .toLowerCase()
+                            .includes((searchText || "").toLowerCase())
+                        ))
+                  ),
+                ].slice(0, 20)
+              : []
+          }
+          onOpenResult={(item) => {
+            handleOpen(item);
+            setSearchText(searchText);
+          }}
         />
 
         <div
