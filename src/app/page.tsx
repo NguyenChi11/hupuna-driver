@@ -29,7 +29,7 @@ export default function Home() {
   const [newType, setNewType] = useState<ItemType | "folder">("folder");
   const [newName, setNewName] = useState("");
   const [newUrl, setNewUrl] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -140,31 +140,29 @@ export default function Home() {
           .filter((i) => !i.trashedAt);
       }
     } else {
-      // "All Files" logic
       const currentFolders = folders
-        .filter(
-          (f) =>
-            f.parentId === currentFolderId && (f.scope ?? "local") === "local"
-        )
+        .filter((f) => (f.scope ?? "local") === "local")
         .filter((f) => !f.trashedAt);
       const currentFiles = items
-        .filter(
-          (i: FileItem) =>
-            i.parentId === currentFolderId && (i.scope ?? "local") === "local"
-        )
+        .filter((i: FileItem) => (i.scope ?? "local") === "local")
         .filter((i) => !i.trashedAt);
 
-      // Merge for sorting
-      resultItems = [...currentFolders, ...currentFiles];
+      if (currentFolderId) {
+        resultItems = [
+          ...currentFolders.filter((f) => f.parentId === currentFolderId),
+          ...currentFiles.filter((i) => i.parentId === currentFolderId),
+        ];
+      } else {
+        resultItems = [...currentFolders, ...currentFiles];
+      }
 
-      // Sorting order: Folder, Image, Video, Link, File
       const typeOrder = ["folder", "image", "video", "link", "file"];
       resultItems.sort((a, b) => {
         const typeA = "type" in a ? a.type : "folder";
         const typeB = "type" in b ? b.type : "folder";
         const orderDiff = typeOrder.indexOf(typeA) - typeOrder.indexOf(typeB);
         if (orderDiff !== 0) return orderDiff;
-        return b.createdAt - a.createdAt; // Secondary sort by date
+        return b.createdAt - a.createdAt;
       });
     }
 
@@ -238,7 +236,8 @@ export default function Home() {
     if (newType === "link") {
       if (!newUrl) return; // Must have URL for link
     } else {
-      if (newType !== "folder" && !newName && !newUrl && !file) return;
+      if (newType !== "folder" && !newName && !newUrl && files.length === 0)
+        return;
     }
 
     const isGlobal = sidebarSection.startsWith("global:");
@@ -255,45 +254,67 @@ export default function Home() {
       };
       setFolders((prev) => [...prev, newFolder]);
     } else {
-      let finalName = newName;
-      if (!finalName) {
-        if (newType === "link") {
-          finalName = newUrl;
-        } else {
-          if (file) finalName = file.name;
-          else if (newUrl) finalName = newUrl;
-          else finalName = "Untitled";
-        }
-      }
-
       setIsAnalyzing(true);
-      const aiData = await analyzeFileAI(finalName, newType);
+      const newItems: FileItem[] = [];
 
-      let finalUrl = newUrl;
-      // Only use file object URL if NOT a link type (link type uses direct URL)
-      if (newType !== "link" && file) {
-        finalUrl = URL.createObjectURL(file);
+      if (newType !== "link" && files.length > 0) {
+        // Multi-file upload
+        for (const f of files) {
+          let finalName = f.name;
+          if (files.length === 1 && newName) {
+            finalName = newName;
+          }
+
+          const aiData = await analyzeFileAI(finalName, newType);
+          const finalUrl = URL.createObjectURL(f);
+
+          newItems.push({
+            id: Math.random().toString(36).substr(2, 9),
+            name: finalName,
+            type: newType as ItemType,
+            parentId: targetParentId,
+            createdAt: Date.now(),
+            url: finalUrl,
+            size: f.size,
+            description: aiData.description,
+            tags: aiData.tags,
+            scope: scopeTarget,
+          });
+        }
+      } else {
+        let finalName = newName;
+        if (!finalName) {
+          if (newType === "link") {
+            finalName = newUrl;
+          } else {
+            if (newUrl) finalName = newUrl;
+            else finalName = "Untitled";
+          }
+        }
+
+        const aiData = await analyzeFileAI(finalName, newType);
+
+        newItems.push({
+          id: Math.random().toString(36).substr(2, 9),
+          name: finalName,
+          type: newType as ItemType,
+          parentId: targetParentId,
+          createdAt: Date.now(),
+          url: newUrl,
+          size: undefined,
+          description: aiData.description,
+          tags: aiData.tags,
+          scope: scopeTarget,
+        });
       }
 
-      const newItem: FileItem = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: finalName,
-        type: newType as ItemType,
-        parentId: targetParentId,
-        createdAt: Date.now(),
-        url: finalUrl,
-        size: newType !== "link" && file ? file.size : undefined,
-        description: aiData.description,
-        tags: aiData.tags,
-        scope: scopeTarget,
-      };
-      setItems((prev) => [...prev, newItem]);
+      setItems((prev) => [...prev, ...newItems]);
       setIsAnalyzing(false);
     }
 
     setNewName("");
     setNewUrl("");
-    setFile(null);
+    setFiles([]);
     setIsModalOpen(false);
   };
 
@@ -960,8 +981,8 @@ export default function Home() {
           setNewName={setNewName}
           newUrl={newUrl}
           setNewUrl={setNewUrl}
-          file={file}
-          setFile={setFile}
+          files={files}
+          setFiles={setFiles}
           isAnalyzing={isAnalyzing}
           handleCreate={handleCreate}
         />
