@@ -22,7 +22,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
   ];
 
   return (
-    <div className="flex items-center gap-3 py-4 overflow-x-auto custom-scrollbar bg-white border-b border-gray-200">
+    <div className="flex items-center gap-3 py-4 overflow-x-auto mb-2 custom-scrollbar  bg-white border-b border-gray-200">
       {filters.map((filter) => (
         <button
           key={filter.id}

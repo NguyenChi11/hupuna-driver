@@ -74,6 +74,12 @@ export const useDrive = () => {
       const trashedItems = items.filter((i) => i.trashedAt);
       resultItems = [...trashedFolders, ...trashedItems];
     }
+    // Starred view
+    else if (sidebarSection === "starred") {
+      const starredFolders = folders.filter((f) => f.starred && !f.trashedAt);
+      const starredItems = items.filter((i) => i.starred && !i.trashedAt);
+      resultItems = [...starredFolders, ...starredItems];
+    }
     // Global navigation vs Folder browsing
     else if (sidebarSection !== "all") {
       const isGlobal = sidebarSection.startsWith("global:");
@@ -444,6 +450,18 @@ export const useDrive = () => {
     }
   };
 
+  const handleToggleStar = (id: string, type: "item" | "folder") => {
+    if (type === "folder") {
+      setFolders((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, starred: !f.starred } : f))
+      );
+    } else {
+      setItems((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, starred: !i.starred } : i))
+      );
+    }
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
     // Check if target is interactive (button, input, link)
     if ((e.target as HTMLElement).closest("button, input, a")) return;
@@ -552,6 +570,7 @@ export const useDrive = () => {
     handleBulkRestore,
     handleDownload,
     handleBulkDownload,
+    handleToggleStar,
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,

@@ -18,6 +18,7 @@ const FileCard = ({
   isDeleting,
   isSelected,
   onSelect,
+  onToggleStar,
 }: FileCardProps) => {
   const type = getItemType(item);
 
@@ -67,6 +68,7 @@ const FileCard = ({
           onRestore={onRestore}
           onDownload={onDownload}
           onEdit={() => setIsEditing(true)}
+          onToggleStar={onToggleStar}
         />
       </FileCardIcon>
 

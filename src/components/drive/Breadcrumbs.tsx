@@ -60,7 +60,7 @@ export default function Breadcrumbs({
       </nav>
 
       {/* Title */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
           {getFolderName()}
         </h1>

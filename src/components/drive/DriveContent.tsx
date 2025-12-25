@@ -16,6 +16,7 @@ interface DriveContentProps {
   onRename: (id: string, newName: string, type: "item" | "folder") => void;
   onDownload: (item: FileItem | FolderItem) => void;
   onRestore: (id: string, type: "item" | "folder") => void;
+  onToggleStar: (id: string, type: "item" | "folder") => void;
 }
 
 export default function DriveContent({
@@ -31,6 +32,7 @@ export default function DriveContent({
   onRename,
   onDownload,
   onRestore,
+  onToggleStar,
 }: DriveContentProps) {
   if (
     (sidebarSection === "all" || sidebarSection === "global:all") &&
@@ -103,6 +105,7 @@ export default function DriveContent({
                     onDelete={onDelete}
                     onRename={onRename}
                     onDownload={onDownload}
+                    onToggleStar={onToggleStar}
                     isDeleting={deletingId === item.id}
                     isSelected={selectedItems.has(item.id)}
                     onSelect={() => onSelect(item.id)}
@@ -244,6 +247,7 @@ export default function DriveContent({
               onDelete={onDelete}
               onRename={onRename}
               onDownload={onDownload}
+              onToggleStar={onToggleStar}
               isDeleting={deletingId === item.id}
               isSelected={selectedItems.has(item.id)}
               onSelect={isSelectionMode ? () => onSelect(item.id) : undefined}

@@ -139,7 +139,10 @@ const MobileSidebar: React.FC<MobileSidebarProps> = ({
 
           <MenuSection
             title="System"
-            items={[{ id: "trash", label: "Trash", icon: ICONS.Trash }]}
+            items={[
+              { id: "starred", label: "Starred", icon: ICONS.Star },
+              { id: "trash", label: "Trash", icon: ICONS.Trash },
+            ]}
             isActive={(id) => currentSection === id}
             onItemClick={(id) => {
               setSection(id);

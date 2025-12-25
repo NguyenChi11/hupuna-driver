@@ -12,4 +12,5 @@ export interface FileCardProps {
   isDeleting: boolean;
   isSelected?: boolean;
   onSelect?: (id: string, type: "item" | "folder") => void;
+  onToggleStar?: (id: string, type: "item" | "folder") => void;
 }

@@ -13,6 +13,7 @@ export interface FileItem {
   tags?: string[];
   scope?: "local" | "global";
   trashedAt?: number;
+  starred?: boolean;
 }
 
 export interface FolderItem {
@@ -23,6 +24,7 @@ export interface FolderItem {
   children?: FolderItem[];
   scope?: "local" | "global";
   trashedAt?: number;
+  starred?: boolean;
 }
 
 export interface FileSystemState {

@@ -54,6 +54,7 @@ export default function Home() {
     handleBulkRestore,
     handleDownload,
     handleBulkDownload,
+    handleToggleStar,
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
@@ -138,6 +139,7 @@ export default function Home() {
               onRename={handleRename}
               onDownload={handleDownload}
               onRestore={handleRestore}
+              onToggleStar={handleToggleStar}
             />
           </div>
         </div>
