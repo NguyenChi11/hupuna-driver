@@ -1,7 +1,7 @@
 "use client";
 import { ICONS, STORAGE_KEY } from "@/components/constants";
-import AssetModal from "@/components/ui/AssetModal";
-import FileCard from "@/components/ui/FileCard";
+import AssetModal from "@/components/assets/AssetModal";
+import FileCard from "@/components/file-card/FileCard";
 import FilterBar from "@/components/ui/FilterBar";
 import Header from "@/components/ui/Header";
 import MobileSidebar from "@/components/ui/MobileSidebar";
@@ -765,11 +765,7 @@ export default function Home() {
                             onDownload={handleDownload}
                             isDeleting={deletingId === item.id}
                             isSelected={selectedItems.has(item.id)}
-                            onSelect={
-                              isSelectionMode
-                                ? () => handleSelect(item.id)
-                                : undefined
-                            }
+                            onSelect={() => handleSelect(item.id)}
                           />
                         ))}
                       </div>
@@ -847,11 +843,7 @@ export default function Home() {
                                 onDownload={handleDownload}
                                 isDeleting={deletingId === item.id}
                                 isSelected={selectedItems.has(item.id)}
-                                onSelect={
-                                  isSelectionMode
-                                    ? () => handleSelect(item.id)
-                                    : undefined
-                                }
+                                onSelect={() => handleSelect(item.id)}
                               />
                             ))}
                           </div>
