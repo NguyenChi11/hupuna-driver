@@ -90,7 +90,7 @@ export default function DriveContent({
                   {group.label}
                 </h2>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5 gap-6">
                 {group.items.map((item: FileItem | FolderItem) => (
                   <FileCard
                     key={item.id}
@@ -160,7 +160,7 @@ export default function DriveContent({
                 Folder
               </h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5 gap-6">
               {localItems.map((item) => (
                 <FileCard
                   key={item.id}
@@ -193,7 +193,7 @@ export default function DriveContent({
                 Folder Global
               </h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5 gap-6">
               {globalItems.map((item) => (
                 <FileCard
                   key={item.id}
@@ -232,7 +232,7 @@ export default function DriveContent({
             {sortedAndFilteredItems.length}
           </span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5 gap-6">
           {sortedAndFilteredItems.map((item: FileItem | FolderItem) => (
             <FileCard
               key={item.id}

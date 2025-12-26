@@ -50,6 +50,55 @@ export const useDrive = () => {
   } | null>(null);
   const initialSelectionRef = React.useRef<Set<string>>(new Set());
   const [previewItem, setPreviewItem] = useState<FileItem | null>(null);
+  type AuthorInfo = {
+    authorId?: string;
+    authorName?: string;
+    authorAvatar?: string;
+  };
+  const getAuthorCache = (): Record<string, AuthorInfo> => {
+    try {
+      if (typeof window === "undefined") return {};
+      const raw = localStorage.getItem("drive_author_cache");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+  const setAuthorCache = (cache: Record<string, AuthorInfo>) => {
+    try {
+      if (typeof window === "undefined") return;
+      localStorage.setItem("drive_author_cache", JSON.stringify(cache));
+    } catch {}
+  };
+  const setAuthorFor = (id: string, info: AuthorInfo) => {
+    const cache = getAuthorCache();
+    cache[id] = { ...cache[id], ...info };
+    setAuthorCache(cache);
+  };
+  const enrichWithAuthorCache = <T extends { id: string } & AuthorInfo>(
+    arr: T[]
+  ): T[] => {
+    const cache = getAuthorCache();
+    return arr.map((a) => ({ ...a, ...cache[a.id] }));
+  };
+  const updateCacheFromList = (list: ({ id: string } & AuthorInfo)[]) => {
+    if (!list || list.length === 0) return;
+    const cache = getAuthorCache();
+    let changed = false;
+    list.forEach((i) => {
+      if (i.authorId || i.authorName || i.authorAvatar) {
+        const old = cache[i.id] || {};
+        const merged = {
+          authorId: i.authorId ?? old.authorId,
+          authorName: i.authorName ?? old.authorName,
+          authorAvatar: i.authorAvatar ?? old.authorAvatar,
+        };
+        cache[i.id] = merged;
+        changed = true;
+      }
+    });
+    if (changed) setAuthorCache(cache);
+  };
 
   const breadcrumbs = useMemo(() => {
     const path: FolderItem[] = [];
@@ -199,7 +248,7 @@ export const useDrive = () => {
         if (!json?.success) return;
         const now = Date.now();
         const scope = isGlobal ? "global" : "local";
-        const srvFolders: FolderItem[] = (json.folders || []).map(
+        let srvFolders: FolderItem[] = (json.folders || []).map(
           (f: { id: string; name: string; parentId?: string }) => ({
             id: f.id,
             name: f.name,
@@ -217,7 +266,7 @@ export const useDrive = () => {
               : (user?.avatar as string | undefined),
           })
         );
-        const srvItems: FileItem[] = (json.items || []).map(
+        let srvItems: FileItem[] = (json.items || []).map(
           (it: {
             id: string;
             name?: string;
@@ -246,19 +295,34 @@ export const useDrive = () => {
               : (user?.avatar as string | undefined),
           })
         );
+        srvFolders = enrichWithAuthorCache(srvFolders);
+        srvItems = enrichWithAuthorCache(srvItems);
+        updateCacheFromList(srvFolders);
+        updateCacheFromList(srvItems);
 
         // Remove existing items of the same scope AND same parent to avoid duplication or stale data
         // But keep other folders (ancestors, siblings of ancestors) so breadcrumbs work.
 
         setFolders((prev) => {
-          // If recursive (root load), we got ALL folders for this scope, so replace all of this scope
           if (isRecursive) {
             const otherScope = prev.filter(
               (f) => (f.scope ?? "local") !== scope
             );
-            // Deduplicate srvFolders itself just in case? Usually not needed if backend is good.
-            // But we merge with otherScope.
-            return [...otherScope, ...srvFolders];
+            const prevScope = prev.filter(
+              (f) => (f.scope ?? "local") === scope
+            );
+            const prevMap = new Map(prevScope.map((f) => [f.id, f]));
+            const mergedSrv = srvFolders.map((f) => {
+              const old = prevMap.get(f.id);
+              return {
+                ...f,
+                authorId: f.authorId ?? old?.authorId,
+                authorName: f.authorName ?? old?.authorName,
+                authorAvatar: f.authorAvatar ?? old?.authorAvatar,
+              };
+            });
+            updateCacheFromList(mergedSrv);
+            return [...otherScope, ...mergedSrv];
           }
 
           const filtered = prev.filter(
@@ -266,9 +330,24 @@ export const useDrive = () => {
               (f.scope ?? "local") !== scope ||
               f.parentId !== (currentFolderId ?? null)
           );
-          // Deduplicate by ID just in case
+          const currentScope = prev.filter(
+            (f) =>
+              (f.scope ?? "local") === scope &&
+              f.parentId === (currentFolderId ?? null)
+          );
+          const prevMap = new Map(currentScope.map((f) => [f.id, f]));
+          const mergedSrv = srvFolders.map((f) => {
+            const old = prevMap.get(f.id);
+            return {
+              ...f,
+              authorId: f.authorId ?? old?.authorId,
+              authorName: f.authorName ?? old?.authorName,
+              authorAvatar: f.authorAvatar ?? old?.authorAvatar,
+            };
+          });
           const map = new Map<string, FolderItem>();
-          [...filtered, ...srvFolders].forEach((f) => map.set(f.id, f));
+          [...filtered, ...mergedSrv].forEach((f) => map.set(f.id, f));
+          updateCacheFromList(mergedSrv);
           return Array.from(map.values());
         });
         setItems((prev) => {
@@ -276,7 +355,21 @@ export const useDrive = () => {
             const otherScope = prev.filter(
               (i) => (i.scope ?? "local") !== scope
             );
-            return [...otherScope, ...srvItems];
+            const prevScope = prev.filter(
+              (i) => (i.scope ?? "local") === scope
+            );
+            const prevMap = new Map(prevScope.map((i) => [i.id, i]));
+            const mergedSrv = srvItems.map((i) => {
+              const old = prevMap.get(i.id);
+              return {
+                ...i,
+                authorId: i.authorId ?? old?.authorId,
+                authorName: i.authorName ?? old?.authorName,
+                authorAvatar: i.authorAvatar ?? old?.authorAvatar,
+              };
+            });
+            updateCacheFromList(mergedSrv);
+            return [...otherScope, ...mergedSrv];
           }
 
           const filtered = prev.filter(
@@ -284,8 +377,24 @@ export const useDrive = () => {
               (i.scope ?? "local") !== scope ||
               i.parentId !== (currentFolderId ?? null)
           );
+          const currentScope = prev.filter(
+            (i) =>
+              (i.scope ?? "local") === scope &&
+              i.parentId === (currentFolderId ?? null)
+          );
+          const prevMap = new Map(currentScope.map((i) => [i.id, i]));
+          const mergedSrv = srvItems.map((i) => {
+            const old = prevMap.get(i.id);
+            return {
+              ...i,
+              authorId: i.authorId ?? old?.authorId,
+              authorName: i.authorName ?? old?.authorName,
+              authorAvatar: i.authorAvatar ?? old?.authorAvatar,
+            };
+          });
           const map = new Map<string, FileItem>();
-          [...filtered, ...srvItems].forEach((i) => map.set(i.id, i));
+          [...filtered, ...mergedSrv].forEach((i) => map.set(i.id, i));
+          updateCacheFromList(mergedSrv);
           return Array.from(map.values());
         });
       } catch {}
@@ -346,14 +455,47 @@ export const useDrive = () => {
             trashedAt: it.trashedAt || now,
           }));
 
-        const globalFolders = mapFolders(jsonGlobal?.folders, "global");
-        const globalItems = mapItems(jsonGlobal?.items, "global");
-        const localFolders = mapFolders(jsonLocal?.folders, "local");
-        const localItems = mapItems(jsonLocal?.items, "local");
+        let globalFolders = mapFolders(jsonGlobal?.folders, "global");
+        let globalItems = mapItems(jsonGlobal?.items, "global");
+        let localFolders = mapFolders(jsonLocal?.folders, "local");
+        let localItems = mapItems(jsonLocal?.items, "local");
+        globalFolders = enrichWithAuthorCache(globalFolders);
+        globalItems = enrichWithAuthorCache(globalItems);
+        localFolders = enrichWithAuthorCache(localFolders);
+        localItems = enrichWithAuthorCache(localItems);
+        updateCacheFromList(globalFolders);
+        updateCacheFromList(globalItems);
+        updateCacheFromList(localFolders);
+        updateCacheFromList(localItems);
 
-        // Replace all items since we are loading fresh trash
-        setFolders([...localFolders, ...globalFolders]);
-        setItems([...localItems, ...globalItems]);
+        setFolders((prev) => {
+          const prevMap = new Map(prev.map((f) => [f.id, f]));
+          const merged = [...localFolders, ...globalFolders].map((f) => {
+            const old = prevMap.get(f.id);
+            return {
+              ...f,
+              authorId: f.authorId ?? old?.authorId,
+              authorName: f.authorName ?? old?.authorName,
+              authorAvatar: f.authorAvatar ?? old?.authorAvatar,
+            };
+          });
+          updateCacheFromList(merged);
+          return merged;
+        });
+        setItems((prev) => {
+          const prevMap = new Map(prev.map((i) => [i.id, i]));
+          const merged = [...localItems, ...globalItems].map((i) => {
+            const old = prevMap.get(i.id);
+            return {
+              ...i,
+              authorId: i.authorId ?? old?.authorId,
+              authorName: i.authorName ?? old?.authorName,
+              authorAvatar: i.authorAvatar ?? old?.authorAvatar,
+            };
+          });
+          updateCacheFromList(merged);
+          return merged;
+        });
       } catch {}
     };
     loadTrash();
@@ -442,12 +584,18 @@ export const useDrive = () => {
             action: "adjacencyCreateFolder",
             name: newName,
             parentId: targetParentId ?? undefined,
+            authorId: user?._id,
+            authorName: user?.name,
+            authorAvatar: user?.avatar as string | undefined,
           }
         : {
             action: "adjacencyCreateFolder",
             name: newName,
             parentId: targetParentId ?? undefined,
             roomId,
+            authorId: user?._id,
+            authorName: user?.name,
+            authorAvatar: user?.avatar as string | undefined,
           };
 
       try {
@@ -468,6 +616,11 @@ export const useDrive = () => {
             authorName: user?.name,
             authorAvatar: user?.avatar as string | undefined,
           };
+          setAuthorFor(newFolder.id, {
+            authorId: newFolder.authorId,
+            authorName: newFolder.authorName,
+            authorAvatar: newFolder.authorAvatar,
+          });
           setFolders((prev) => [...prev, newFolder]);
         }
       } catch {}
@@ -500,6 +653,10 @@ export const useDrive = () => {
               // Global upload
               // ownerId is handled by cookie/fingerprint in backend if not passed,
               // or we can pass it if we have it, but for now backend handles it.
+              if (user?._id) form.append("authorId", String(user._id));
+              if (user?.name) form.append("authorName", String(user.name));
+              if (user?.avatar)
+                form.append("authorAvatar", String(user.avatar));
             } else {
               // Local upload
               form.append("roomId", roomId);
@@ -528,6 +685,11 @@ export const useDrive = () => {
                 description: aiData.description,
                 tags: aiData.tags,
                 scope: scopeTarget,
+                authorId: user?._id,
+                authorName: user?.name,
+                authorAvatar: user?.avatar as string | undefined,
+              });
+              setAuthorFor(itemId, {
                 authorId: user?._id,
                 authorName: user?.name,
                 authorAvatar: user?.avatar as string | undefined,
@@ -566,6 +728,9 @@ export const useDrive = () => {
                   type: "text",
                   name: finalName,
                   url: newUrl,
+                  authorId: user?._id,
+                  authorName: user?.name,
+                  authorAvatar: user?.avatar as string | undefined,
                 }
               : {
                   action: "adjacencyUpsertItem",
@@ -574,6 +739,9 @@ export const useDrive = () => {
                   name: finalName,
                   url: newUrl,
                   roomId,
+                  authorId: user?._id,
+                  authorName: user?.name,
+                  authorAvatar: user?.avatar as string | undefined,
                 };
 
             const res = await fetch(endpoint, {
@@ -595,6 +763,14 @@ export const useDrive = () => {
                 description: aiData.description,
                 tags: aiData.tags,
                 scope: scopeTarget,
+                authorId: user?._id,
+                authorName: user?.name,
+                authorAvatar: user?.avatar as string | undefined,
+              });
+              setAuthorFor(savedItem.id, {
+                authorId: user?._id,
+                authorName: user?.name,
+                authorAvatar: user?.avatar as string | undefined,
               });
             }
           } else {
@@ -610,6 +786,11 @@ export const useDrive = () => {
               description: aiData.description,
               tags: aiData.tags,
               scope: scopeTarget,
+              authorId: user?._id,
+              authorName: user?.name,
+              authorAvatar: user?.avatar as string | undefined,
+            });
+            setAuthorFor(newItems[newItems.length - 1].id, {
               authorId: user?._id,
               authorName: user?.name,
               authorAvatar: user?.avatar as string | undefined,

@@ -66,7 +66,7 @@ export default function Breadcrumbs({
         </h1>
 
         {/* Select Button */}
-        <button
+        {/* <button
           onClick={() => {
             onToggleSelectionMode();
             if (isSelectionMode) onClearSelection();
@@ -79,7 +79,7 @@ export default function Breadcrumbs({
         >
           <ICONS.CheckSquare className="w-5 h-5" />
           {isSelectionMode ? "Cancel" : "Select"}
-        </button>
+        </button> */}
       </div>
     </div>
   );

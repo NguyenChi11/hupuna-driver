@@ -14,6 +14,9 @@ type Item = {
   url?: string;
   fileName?: string;
   content?: string;
+  authorId?: string;
+  authorName?: string;
+  authorAvatar?: string;
   updatedAt: number;
 };
 type FolderNode = {
@@ -24,6 +27,9 @@ type FolderNode = {
   items: Item[];
   createdAt?: number;
   updatedAt?: number;
+  authorId?: string;
+  authorName?: string;
+  authorAvatar?: string;
 };
 type GlobalFolderDoc = {
   _id?: string;
@@ -247,6 +253,15 @@ export async function POST(req: NextRequest) {
       const items = db.collection(GLOBAL_COLLECTION);
       const itemId = genId("i");
       const now = Date.now();
+      const authorId = String(form.get("authorId") || ownerId);
+      const authorName =
+        typeof form.get("authorName") === "string"
+          ? (form.get("authorName") as string)
+          : undefined;
+      const authorAvatar =
+        typeof form.get("authorAvatar") === "string"
+          ? (form.get("authorAvatar") as string)
+          : undefined;
       await items.insertOne({
         ownerId,
         id: itemId,
@@ -257,6 +272,9 @@ export async function POST(req: NextRequest) {
         name: (file as { name: string }).name,
         fileName: (file as { name: string }).name,
         fileUrl: uploadRes.link,
+        authorId,
+        authorName,
+        authorAvatar,
         createdAt: now,
         updatedAt: now,
       });
@@ -269,6 +287,9 @@ export async function POST(req: NextRequest) {
           type: typeRaw,
           fileUrl: uploadRes.link,
           fileName: (file as { name: string }).name,
+          authorId,
+          authorName,
+          authorAvatar,
         },
       });
     }
@@ -357,7 +378,15 @@ export async function POST(req: NextRequest) {
 
         const folders = await adjFolders
           .find(folderQuery)
-          .project({ _id: 0, id: 1, name: 1, parentId: 1 })
+          .project({
+            _id: 0,
+            id: 1,
+            name: 1,
+            parentId: 1,
+            authorId: 1,
+            authorName: 1,
+            authorAvatar: 1,
+          })
           .toArray();
         const items = await adjItems
           .find(itemQuery)
@@ -369,6 +398,9 @@ export async function POST(req: NextRequest) {
             fileUrl: 1,
             fileName: 1,
             folderId: 1,
+            authorId: 1,
+            authorName: 1,
+            authorAvatar: 1,
           })
           .toArray();
         return NextResponse.json({
@@ -384,7 +416,16 @@ export async function POST(req: NextRequest) {
             trashedAt: { $exists: true },
             type: { $exists: false },
           })
-          .project({ _id: 0, id: 1, name: 1, parentId: 1, trashedAt: 1 })
+          .project({
+            _id: 0,
+            id: 1,
+            name: 1,
+            parentId: 1,
+            trashedAt: 1,
+            authorId: 1,
+            authorName: 1,
+            authorAvatar: 1,
+          })
           .toArray();
         const items = await adjItems
           .find({
@@ -401,6 +442,9 @@ export async function POST(req: NextRequest) {
             fileName: 1,
             folderId: 1,
             trashedAt: 1,
+            authorId: 1,
+            authorName: 1,
+            authorAvatar: 1,
           })
           .toArray();
         return NextResponse.json({ success: true, folders, items });
@@ -412,17 +456,25 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Missing name" }, { status: 400 });
         const id = genId("f");
         const now = Date.now();
+        const authorId = String(body.authorId || ownerId);
+        const authorName =
+          typeof body.authorName === "string" ? body.authorName : undefined;
+        const authorAvatar =
+          typeof body.authorAvatar === "string" ? body.authorAvatar : undefined;
         await adjFolders.insertOne({
           ownerId,
           id,
           name,
           parentId,
+          authorId,
+          authorName,
+          authorAvatar,
           createdAt: now,
           updatedAt: now,
         });
         return NextResponse.json({
           success: true,
-          folder: { id, name, parentId },
+          folder: { id, name, parentId, authorId, authorName, authorAvatar },
         });
       }
       case "adjacencyTrashFolder": {
@@ -554,6 +606,15 @@ export async function POST(req: NextRequest) {
               name,
               fileUrl: url,
               fileName,
+              authorId: String(body.authorId || ownerId),
+              authorName:
+                typeof body.authorName === "string"
+                  ? body.authorName
+                  : undefined,
+              authorAvatar:
+                typeof body.authorAvatar === "string"
+                  ? body.authorAvatar
+                  : undefined,
               updatedAt: now,
             },
             $setOnInsert: { createdAt: now },
@@ -570,6 +631,9 @@ export async function POST(req: NextRequest) {
               type: 1,
               fileUrl: 1,
               fileName: 1,
+              authorId: 1,
+              authorName: 1,
+              authorAvatar: 1,
             },
           }
         );
@@ -802,6 +866,9 @@ export async function POST(req: NextRequest) {
             type: it.type,
             fileUrl: it.url,
             fileName: it.fileName,
+            authorId: it.authorId,
+            authorName: it.authorName,
+            authorAvatar: it.authorAvatar,
           })),
         });
       }
@@ -858,6 +925,13 @@ export async function POST(req: NextRequest) {
           url,
           fileName,
           content,
+          authorId: String(body.authorId || ownerId),
+          authorName:
+            typeof body.authorName === "string" ? body.authorName : undefined,
+          authorAvatar:
+            typeof body.authorAvatar === "string"
+              ? body.authorAvatar
+              : undefined,
           updatedAt: Date.now(),
         };
         const nextRoot = updateFolderById(baseRoot, folderId, (f) => ({
@@ -881,6 +955,9 @@ export async function POST(req: NextRequest) {
             type: it.type,
             fileUrl: it.url,
             fileName: it.fileName,
+            authorId: it.authorId,
+            authorName: it.authorName,
+            authorAvatar: it.authorAvatar,
           })),
         });
       }
