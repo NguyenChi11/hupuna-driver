@@ -1,18 +1,48 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ICONS } from "@/components/constants";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate login
-    setTimeout(() => setIsLoading(false), 2000);
+
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "login",
+          data: { username, password },
+        }),
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        const userObj = result.user;
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem("info_user", JSON.stringify(userObj));
+        }
+
+        router.push("/");
+      } else {
+        alert(result.message || "Login failed");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Connection error");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -32,22 +62,22 @@ export default function LoginPage() {
         {/* Login Card */}
         <div className="bg-white rounded-3xl shadow-xl p-8 md:p-10">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email */}
+            {/* Username */}
             <div>
               <label
-                htmlFor="email"
+                htmlFor="username"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
-                Email address
+                Username
               </label>
               <input
-                id="email"
-                type="email"
+                id="username"
+                type="text"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-5 py-4 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all text-base"
-                placeholder="name@company.com"
+                placeholder="Enter your username"
               />
             </div>
 
