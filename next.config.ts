@@ -8,7 +8,17 @@ const nextConfig: NextConfig = {
     localPatterns: [
       {
         pathname: "/api/mega-stream",
-        search: "", // Allow all query strings
+      },
+    ],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "mega.nz",
+        pathname: "/file/**",
+      },
+      {
+        protocol: "https",
+        hostname: "cdn.jsdelivr.net",
       },
     ],
   },

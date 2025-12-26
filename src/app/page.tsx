@@ -62,6 +62,8 @@ export default function Home() {
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
+    previewItem,
+    closePreview,
   } = useDrive();
   const [searchText, setSearchText] = React.useState("");
 
@@ -218,6 +220,32 @@ export default function Home() {
           isAnalyzing={isAnalyzing}
           handleCreate={handleCreate}
         />
+      )}
+      {previewItem && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60">
+          <div className="absolute inset-0" onClick={closePreview} />
+          <div className="relative w-full max-w-4xl mx-auto rounded-2xl overflow-hidden shadow-2xl bg-black">
+            {previewItem.type === "image" ? (
+              <img
+                src={previewItem.url}
+                alt={previewItem.name}
+                className="w-full h-full object-contain bg-black"
+              />
+            ) : (
+              <video
+                src={previewItem.url}
+                controls
+                className="w-full h-full bg-black"
+              />
+            )}
+            <button
+              onClick={closePreview}
+              className="absolute top-3 right-3 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

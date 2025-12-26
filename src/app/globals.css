@@ -13,11 +13,11 @@ body {
   overflow-anchor: none;
 }
 
-img,
+/* img,
 video {
   max-width: 100%;
   height: auto;
-}
+} */
 
 @keyframes showModal {
   0% {

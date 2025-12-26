@@ -1,3 +1,4 @@
+import React from "react";
 import { FileItem, FolderItem } from "@/types/types";
 
 export const FileCardTitle = ({
@@ -7,7 +8,14 @@ export const FileCardTitle = ({
   setEditedName,
   inputRef,
   onSubmit,
-}: any) => {
+}: {
+  item: FileItem | FolderItem;
+  isEditing: boolean;
+  editedName: string;
+  setEditedName: (v: string) => void;
+  inputRef: React.RefObject<HTMLInputElement>;
+  onSubmit: () => void;
+}) => {
   if (isEditing) {
     return (
       <input

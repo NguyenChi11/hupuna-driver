@@ -14,6 +14,9 @@ export interface FileItem {
   scope?: "local" | "global";
   trashedAt?: number;
   starred?: boolean;
+  authorId?: string;
+  authorName?: string;
+  authorAvatar?: string;
 }
 
 export interface FolderItem {
@@ -25,6 +28,9 @@ export interface FolderItem {
   scope?: "local" | "global";
   trashedAt?: number;
   starred?: boolean;
+  authorId?: string;
+  authorName?: string;
+  authorAvatar?: string;
 }
 
 export interface FileSystemState {

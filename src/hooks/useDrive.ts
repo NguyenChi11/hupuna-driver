@@ -49,27 +49,7 @@ export const useDrive = () => {
     y: number;
   } | null>(null);
   const initialSelectionRef = React.useRef<Set<string>>(new Set());
-
-  // Persistence - REMOVED to ensure data isolation per account (from MongoDB only)
-  // useEffect(() => {
-  //   const savedData = localStorage.getItem(STORAGE_KEY);
-  //   if (savedData) {
-  //     const { folders, items } = JSON.parse(savedData);
-  //     setFolders(folders || []);
-  //     setItems(items || []);
-  //   } else {
-  //     setFolders(INITIAL_FOLDERS);
-  //     setItems(INITIAL_ITEMS);
-  //     localStorage.setItem(
-  //       STORAGE_KEY,
-  //       JSON.stringify({ folders: INITIAL_FOLDERS, items: INITIAL_ITEMS })
-  //     );
-  //   }
-  // }, []);
-
-  // useEffect(() => {
-  //   localStorage.setItem(STORAGE_KEY, JSON.stringify({ folders, items }));
-  // }, [folders, items]);
+  const [previewItem, setPreviewItem] = useState<FileItem | null>(null);
 
   const breadcrumbs = useMemo(() => {
     const path: FolderItem[] = [];
@@ -192,7 +172,7 @@ export const useDrive = () => {
 
     const load = async () => {
       try {
-          const type = isGlobal ? sidebarSection.slice(7) : sidebarSection;
+        const type = isGlobal ? sidebarSection.slice(7) : sidebarSection;
         const isCategory = ["image", "video", "link", "file"].includes(type);
         const isRecursive = !currentFolderId || isCategory;
 
@@ -230,6 +210,11 @@ export const useDrive = () => {
                 : f.parentId ?? null,
             createdAt: now,
             scope,
+            authorId: isGlobal ? undefined : user?._id,
+            authorName: isGlobal ? undefined : user?.name,
+            authorAvatar: isGlobal
+              ? undefined
+              : (user?.avatar as string | undefined),
           })
         );
         const srvItems: FileItem[] = (json.items || []).map(
@@ -254,6 +239,11 @@ export const useDrive = () => {
             createdAt: now,
             url: it.fileUrl ? getProxyUrl(it.fileUrl) : undefined,
             scope,
+            authorId: isGlobal ? undefined : user?._id,
+            authorName: isGlobal ? undefined : user?.name,
+            authorAvatar: isGlobal
+              ? undefined
+              : (user?.avatar as string | undefined),
           })
         );
 
@@ -474,6 +464,9 @@ export const useDrive = () => {
             parentId: targetParentId,
             createdAt: Date.now(),
             scope: scopeTarget,
+            authorId: user?._id,
+            authorName: user?.name,
+            authorAvatar: user?.avatar as string | undefined,
           };
           setFolders((prev) => [...prev, newFolder]);
         }
@@ -535,6 +528,9 @@ export const useDrive = () => {
                 description: aiData.description,
                 tags: aiData.tags,
                 scope: scopeTarget,
+                authorId: user?._id,
+                authorName: user?.name,
+                authorAvatar: user?.avatar as string | undefined,
               });
             } else {
               alert(
@@ -614,6 +610,9 @@ export const useDrive = () => {
               description: aiData.description,
               tags: aiData.tags,
               scope: scopeTarget,
+              authorId: user?._id,
+              authorName: user?.name,
+              authorAvatar: user?.avatar as string | undefined,
             });
           }
         } catch {}
@@ -806,16 +805,21 @@ export const useDrive = () => {
         setSidebarSection("all");
       }
       setActiveType("all");
-    } else {
-      if (item.url) window.open(item.url, "_blank");
-      else
-        alert(
-          `Opening: ${item.name}\n\nAI Summary: ${
-            item.description || "No description"
-          }`
-        );
+      return;
     }
+    const t = item.type;
+    if ((t === "image" || t === "video") && item.url) {
+      setPreviewItem(item);
+      return;
+    }
+    if (t === "link" && item.url) {
+      window.open(item.url, "_blank");
+      return;
+    }
+    alert(item.name);
   };
+
+  const closePreview = () => setPreviewItem(null);
 
   const handleSelect = (id: string) => {
     setSelectedItems((prev) => {
@@ -1049,6 +1053,7 @@ export const useDrive = () => {
     isDragging,
     dragStart,
     dragCurrent,
+    previewItem,
     breadcrumbs,
     sortedAndFilteredItems,
     counts,
@@ -1080,5 +1085,6 @@ export const useDrive = () => {
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
+    closePreview,
   };
 };

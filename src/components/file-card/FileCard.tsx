@@ -7,6 +7,8 @@ import { FileCardIcon } from "./FileCardIcon";
 import { FileCardActions } from "./FileCardActions";
 import { FileCardTitle } from "./FileCardTitle";
 import FileCardSelect from "./FileCardSelect";
+import { FileItem, FolderItem } from "@/types/types";
+import { getProxyUrl } from "@/utils/utils";
 
 const FileCard = ({
   item,
@@ -74,14 +76,49 @@ const FileCard = ({
 
       {/* Title */}
       <div className="px-4 pb-4 mt-3">
-        <FileCardTitle
-          item={item}
-          isEditing={isEditing}
-          editedName={editedName}
-          setEditedName={setEditedName}
-          inputRef={inputRef}
-          onSubmit={() => submitRename(onRename)}
-        />
+        <div className="flex items-center justify-between gap-3">
+          <FileCardTitle
+            item={item}
+            isEditing={isEditing}
+            editedName={editedName}
+            setEditedName={setEditedName}
+            inputRef={inputRef}
+            onSubmit={() => submitRename(onRename)}
+          />
+          {(() => {
+            const avatar =
+              (item as FileItem).authorAvatar ??
+              (item as FolderItem).authorAvatar;
+            const name =
+              (item as FileItem).authorName ?? (item as FolderItem).authorName;
+            return avatar || name;
+          })() ? (
+            <div className="shrink-0">
+              {(() => {
+                const avatar =
+                  (item as FileItem).authorAvatar ??
+                  (item as FolderItem).authorAvatar;
+                const name =
+                  (item as FileItem).authorName ??
+                  (item as FolderItem).authorName;
+                if (avatar) {
+                  return (
+                    <img
+                      src={getProxyUrl(avatar)}
+                      alt={name || "User"}
+                      className="w-6 h-6 rounded-full object-cover border border-gray-200"
+                    />
+                  );
+                }
+                return (
+                  <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-xs font-semibold flex items-center justify-center">
+                    {(name || "U").slice(0, 1).toUpperCase()}
+                  </div>
+                );
+              })()}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* Overlay khi đang xóa */}

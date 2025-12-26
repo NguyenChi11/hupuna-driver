@@ -1,5 +1,14 @@
+import React from "react";
 import { ICONS } from "@/components/constants";
-import { getIconByType } from "@/utils/fileCard";
+import Image from "next/image";
+
+const ICON_COMPONENTS = {
+  folder: ICONS.Folder,
+  video: ICONS.Video,
+  image: ICONS.Image,
+  link: ICONS.Link,
+  file: ICONS.File,
+} as const;
 
 export const FileCardIcon = ({
   type,
@@ -7,29 +16,38 @@ export const FileCardIcon = ({
   children,
 }: {
   type: string;
-  item: any;
+  item: {
+    name: string;
+    url?: string;
+    thumbnail?: string;
+  };
   children?: React.ReactNode;
 }) => {
-  const Icon = getIconByType(type);
+  const Icon =
+    ICON_COMPONENTS[(type as keyof typeof ICON_COMPONENTS) || "file"] ||
+    ICON_COMPONENTS.file;
   const isMedia = type === "image" || type === "video";
 
   return (
     <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-50">
-      {isMedia && item.thumbnail ? (
+      {isMedia && type === "image" && (item.thumbnail || item.url) ? (
         <>
-          <img
-            src={item.thumbnail}
+          <Image
+            width={200}
+            height={200}
+            src={item.thumbnail || item.url!}
             alt={item.name}
             className="w-full h-full object-cover"
           />
-          {type === "video" && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="bg-black/40 rounded-full p-3">
-                <ICONS.Play className="w-8 h-8 text-white" />
-              </div>
-            </div>
-          )}
         </>
+      ) : isMedia && type === "video" && item.url ? (
+        <video
+          src={item.url}
+          className="w-full h-full object-cover"
+          muted
+          playsInline
+          preload="metadata"
+        />
       ) : (
         <div className="flex items-center justify-center h-full">
           <Icon className="w-16 h-16 text-gray-400" />

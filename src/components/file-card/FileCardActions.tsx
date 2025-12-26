@@ -4,9 +4,9 @@ import { isFolder } from "@/utils/fileCard";
 
 interface Props {
   item: FileOrFolder;
-  onDelete: any;
-  onRestore?: any;
-  onDownload?: any;
+  onDelete: (id: string, type: "item" | "folder") => void;
+  onRestore?: (id: string, type: "item" | "folder") => void;
+  onDownload?: (item: FileOrFolder) => void;
   onEdit: () => void;
   onToggleStar?: (id: string, type: "item" | "folder") => void;
 }
