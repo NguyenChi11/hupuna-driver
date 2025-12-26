@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FileItem, FolderItem, ItemType } from "@/types/types";
-import { INITIAL_FOLDERS, INITIAL_ITEMS } from "@/data/testData";
-import { STORAGE_KEY } from "@/components/constants";
 import { analyzeFileAI } from "@/service/mockAiService";
 import { getProxyUrl } from "@/utils/utils";
 import { useCurrentUser } from "./useCurrentUser";
@@ -52,26 +50,26 @@ export const useDrive = () => {
   } | null>(null);
   const initialSelectionRef = React.useRef<Set<string>>(new Set());
 
-  // Persistence
-  useEffect(() => {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    if (savedData) {
-      const { folders, items } = JSON.parse(savedData);
-      setFolders(folders || []);
-      setItems(items || []);
-    } else {
-      setFolders(INITIAL_FOLDERS);
-      setItems(INITIAL_ITEMS);
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ folders: INITIAL_FOLDERS, items: INITIAL_ITEMS })
-      );
-    }
-  }, []);
+  // Persistence - REMOVED to ensure data isolation per account (from MongoDB only)
+  // useEffect(() => {
+  //   const savedData = localStorage.getItem(STORAGE_KEY);
+  //   if (savedData) {
+  //     const { folders, items } = JSON.parse(savedData);
+  //     setFolders(folders || []);
+  //     setItems(items || []);
+  //   } else {
+  //     setFolders(INITIAL_FOLDERS);
+  //     setItems(INITIAL_ITEMS);
+  //     localStorage.setItem(
+  //       STORAGE_KEY,
+  //       JSON.stringify({ folders: INITIAL_FOLDERS, items: INITIAL_ITEMS })
+  //     );
+  //   }
+  // }, []);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ folders, items }));
-  }, [folders, items]);
+  // useEffect(() => {
+  //   localStorage.setItem(STORAGE_KEY, JSON.stringify({ folders, items }));
+  // }, [folders, items]);
 
   const breadcrumbs = useMemo(() => {
     const path: FolderItem[] = [];
@@ -156,6 +154,13 @@ export const useDrive = () => {
 
   useEffect(() => {
     const isGlobal = sidebarSection.startsWith("global:");
+
+    // If no user (roomId empty), clear local data to ensure separation
+    if (!roomId) {
+      setFolders((prev) => prev.filter((f) => f.scope === "global"));
+      setItems((prev) => prev.filter((i) => i.scope === "global"));
+    }
+
     if (!roomId && !isGlobal) return;
 
     const load = async () => {
