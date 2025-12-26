@@ -3,6 +3,7 @@ import { FileItem, FolderItem, ItemType } from "@/types/types";
 import { INITIAL_FOLDERS, INITIAL_ITEMS } from "@/data/testData";
 import { STORAGE_KEY } from "@/components/constants";
 import { analyzeFileAI } from "@/service/mockAiService";
+import { getProxyUrl } from "@/utils/utils";
 
 export const useDrive = () => {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -133,6 +134,121 @@ export const useDrive = () => {
     return resultItems;
   }, [currentFolderId, folders, items, sidebarSection]);
 
+  useEffect(() => {
+    const isGlobal = sidebarSection.startsWith("global:");
+    if (!isGlobal) return;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/folders-global", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "adjacencyRead",
+            parentId: currentFolderId ?? undefined,
+          }),
+        });
+        const json = await res.json();
+        if (!json?.success) return;
+        const now = Date.now();
+        const srvFolders: FolderItem[] = (json.folders || []).map(
+          (f: { id: string; name: string; parentId?: string }) => ({
+            id: f.id,
+            name: f.name,
+            parentId: f.parentId ?? null,
+            createdAt: now,
+            scope: "global",
+          })
+        );
+        const srvItems: FileItem[] = (json.items || []).map(
+          (it: {
+            id: string;
+            name?: string;
+            type?: "image" | "video" | "file" | "text";
+            fileUrl?: string;
+            fileName?: string;
+          }) => ({
+            id: it.id,
+            name: it.name || it.fileName || "Untitled",
+            type: it.type === "image" || it.type === "video" ? it.type : "file",
+            parentId: currentFolderId,
+            createdAt: now,
+            url: it.fileUrl ? getProxyUrl(it.fileUrl) : undefined,
+            scope: "global",
+          })
+        );
+        setFolders((prev) => [
+          ...prev.filter((f) => (f.scope ?? "local") === "local"),
+          ...srvFolders,
+        ]);
+        setItems((prev) => [
+          ...prev.filter((i) => (i.scope ?? "local") === "local"),
+          ...srvItems,
+        ]);
+      } catch {}
+    };
+    load();
+  }, [sidebarSection, currentFolderId]);
+
+  useEffect(() => {
+    if (sidebarSection !== "trash") return;
+    const loadTrash = async () => {
+      try {
+        const res = await fetch("/api/folders-global", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "adjacencyReadTrash" }),
+        });
+        const json = await res.json();
+        if (!json?.success) return;
+        const now = Date.now();
+        const srvFolders: FolderItem[] = (json.folders || []).map(
+          (f: {
+            id: string;
+            name: string;
+            parentId?: string;
+            trashedAt?: number;
+          }) => ({
+            id: f.id,
+            name: f.name,
+            parentId: f.parentId ?? null,
+            createdAt: now,
+            scope: "global",
+            trashedAt: f.trashedAt || now,
+          })
+        );
+        const srvItems: FileItem[] = (json.items || []).map(
+          (it: {
+            id: string;
+            name?: string;
+            type?: "image" | "video" | "file" | "text";
+            fileUrl?: string;
+            fileName?: string;
+            folderId?: string;
+            trashedAt?: number;
+          }) => ({
+            id: it.id,
+            name: it.name || it.fileName || "Untitled",
+            type: it.type === "image" || it.type === "video" ? it.type : "file",
+            parentId: it.folderId ?? null,
+            createdAt: now,
+            url: it.fileUrl ? getProxyUrl(it.fileUrl) : undefined,
+            scope: "global",
+            trashedAt: it.trashedAt || now,
+          })
+        );
+        setFolders((prev) => [
+          ...prev.filter((f) => (f.scope ?? "local") === "local"),
+          ...srvFolders,
+        ]);
+        setItems((prev) => [
+          ...prev.filter((i) => (i.scope ?? "local") === "local"),
+          ...srvItems,
+        ]);
+      } catch {}
+    };
+    loadTrash();
+  }, [sidebarSection]);
+
   const searchedItems = useMemo(() => {
     let result = baseItems;
     if (searchQuery) {
@@ -207,17 +323,42 @@ export const useDrive = () => {
 
     const isGlobal = sidebarSection.startsWith("global:");
     const scopeTarget: "local" | "global" = isGlobal ? "global" : "local";
-    const targetParentId = isGlobal ? null : currentFolderId;
+    const targetParentId = currentFolderId;
 
     if (newType === "folder") {
-      const newFolder: FolderItem = {
-        id: Math.random().toString(36).slice(2, 11),
-        name: newName,
-        parentId: targetParentId,
-        createdAt: Date.now(),
-        scope: scopeTarget,
-      };
-      setFolders((prev) => [...prev, newFolder]);
+      if (isGlobal) {
+        try {
+          const res = await fetch("/api/folders-global", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "adjacencyCreateFolder",
+              name: newName,
+              parentId: targetParentId ?? undefined,
+            }),
+          });
+          const json = await res.json();
+          if (json?.success && json?.folder?.id) {
+            const newFolder: FolderItem = {
+              id: json.folder.id,
+              name: newName,
+              parentId: targetParentId,
+              createdAt: Date.now(),
+              scope: "global",
+            };
+            setFolders((prev) => [...prev, newFolder]);
+          }
+        } catch {}
+      } else {
+        const newFolder: FolderItem = {
+          id: Math.random().toString(36).slice(2, 11),
+          name: newName,
+          parentId: targetParentId,
+          createdAt: Date.now(),
+          scope: scopeTarget,
+        };
+        setFolders((prev) => [...prev, newFolder]);
+      }
     } else {
       setIsAnalyzing(true);
       const newItems: FileItem[] = [];
@@ -231,20 +372,64 @@ export const useDrive = () => {
           }
 
           const aiData = await analyzeFileAI(finalName, newType);
-          const finalUrl = URL.createObjectURL(f);
-
-          newItems.push({
-            id: Math.random().toString(36).substr(2, 9),
-            name: finalName,
-            type: newType as ItemType,
-            parentId: targetParentId,
-            createdAt: Date.now(),
-            url: finalUrl,
-            size: f.size,
-            description: aiData.description,
-            tags: aiData.tags,
-            scope: scopeTarget,
-          });
+          if (isGlobal) {
+            try {
+              const form = new FormData();
+              form.append("file", f);
+              form.append(
+                "type",
+                newType === "image" || newType === "video" || newType === "file"
+                  ? newType
+                  : "file"
+              );
+              form.append("folderId", (targetParentId ?? "root") as string);
+              const res = await fetch("/api/folders-global", {
+                method: "POST",
+                body: form,
+              });
+              const json = await res.json();
+              if (json?.success && json?.link) {
+                const link: string = json.link;
+                const itemId: string =
+                  json?.item?.id || Math.random().toString(36).substr(2, 9);
+                const finalUrl = getProxyUrl(link);
+                newItems.push({
+                  id: itemId,
+                  name: finalName,
+                  type: newType as ItemType,
+                  parentId: targetParentId,
+                  createdAt: Date.now(),
+                  url: finalUrl,
+                  size: f.size,
+                  description: aiData.description,
+                  tags: aiData.tags,
+                  scope: "global",
+                });
+              } else {
+                alert(
+                  typeof json?.message === "string" && json.message
+                    ? json.message
+                    : "Upload Mega thất bại"
+                );
+              }
+            } catch {
+              alert("Không thể kết nối API upload Mega");
+            }
+          } else {
+            const finalUrl = URL.createObjectURL(f);
+            newItems.push({
+              id: Math.random().toString(36).substr(2, 9),
+              name: finalName,
+              type: newType as ItemType,
+              parentId: targetParentId,
+              createdAt: Date.now(),
+              url: finalUrl,
+              size: f.size,
+              description: aiData.description,
+              tags: aiData.tags,
+              scope: scopeTarget,
+            });
+          }
         }
       } else {
         let finalName = newName;
@@ -258,19 +443,48 @@ export const useDrive = () => {
         }
 
         const aiData = await analyzeFileAI(finalName, newType);
-
-        newItems.push({
-          id: Math.random().toString(36).substr(2, 9),
-          name: finalName,
-          type: newType as ItemType,
-          parentId: targetParentId,
-          createdAt: Date.now(),
-          url: newUrl,
-          size: undefined,
-          description: aiData.description,
-          tags: aiData.tags,
-          scope: scopeTarget,
-        });
+        if (isGlobal) {
+          try {
+            if (newType === "link") {
+              await fetch("/api/folders-global", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "adjacencyUpsertItem",
+                  folderId: (targetParentId ?? "root") as string,
+                  type: "file",
+                  name: finalName,
+                  url: newUrl,
+                }),
+              });
+            }
+          } catch {}
+          newItems.push({
+            id: Math.random().toString(36).substr(2, 9),
+            name: finalName,
+            type: newType as ItemType,
+            parentId: targetParentId,
+            createdAt: Date.now(),
+            url: newType === "link" ? newUrl : undefined,
+            size: undefined,
+            description: aiData.description,
+            tags: aiData.tags,
+            scope: "global",
+          });
+        } else {
+          newItems.push({
+            id: Math.random().toString(36).substr(2, 9),
+            name: finalName,
+            type: newType as ItemType,
+            parentId: targetParentId,
+            createdAt: Date.now(),
+            url: newUrl,
+            size: undefined,
+            description: aiData.description,
+            tags: aiData.tags,
+            scope: scopeTarget,
+          });
+        }
       }
 
       setItems((prev) => [...prev, ...newItems]);
@@ -304,6 +518,34 @@ export const useDrive = () => {
       }
       setDeletingId(null);
     }, 400);
+
+    const isGlobal = sidebarSection.startsWith("global:") || false;
+    const run = async () => {
+      try {
+        if (sidebarSection === "trash") {
+          await fetch("/api/folders-global", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(
+              type === "folder"
+                ? { action: "adjacencyPermanentDeleteFolder", folderId: id }
+                : { action: "adjacencyPermanentDeleteItem", itemId: id }
+            ),
+          });
+        } else if (isGlobal) {
+          await fetch("/api/folders-global", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(
+              type === "folder"
+                ? { action: "adjacencyTrashFolder", folderId: id }
+                : { action: "adjacencyTrashItem", itemId: id }
+            ),
+          });
+        }
+      } catch {}
+    };
+    run();
   };
 
   const handleRestore = (id: string, type: "item" | "folder") => {
@@ -320,6 +562,21 @@ export const useDrive = () => {
       }
       setDeletingId(null);
     }, 400);
+
+    const run = async () => {
+      try {
+        await fetch("/api/folders-global", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            type === "folder"
+              ? { action: "adjacencyRestoreFolder", folderId: id }
+              : { action: "adjacencyRestoreItem", itemId: id }
+          ),
+        });
+      } catch {}
+    };
+    run();
   };
 
   const handleRename = (
@@ -341,7 +598,12 @@ export const useDrive = () => {
   const handleOpen = (item: FileItem | FolderItem) => {
     if (!("type" in item)) {
       setCurrentFolderId(item.id);
-      setSidebarSection("all");
+      const isGlobal = (item as FolderItem).scope === "global";
+      if (isGlobal) {
+        setSidebarSection("global:all");
+      } else {
+        setSidebarSection("all");
+      }
       setActiveType("all");
     } else {
       if (item.url) window.open(item.url, "_blank");
@@ -389,6 +651,30 @@ export const useDrive = () => {
     }
     setSelectedItems(new Set());
     setIsSelectionMode(false);
+
+    const run = async () => {
+      try {
+        const ids = Array.from(selectedItems);
+        const isTrashView = sidebarSection === "trash";
+        for (const id of ids) {
+          const isFolder = folders.some((f) => f.id === id);
+          await fetch("/api/folders-global", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(
+              isTrashView
+                ? isFolder
+                  ? { action: "adjacencyPermanentDeleteFolder", folderId: id }
+                  : { action: "adjacencyPermanentDeleteItem", itemId: id }
+                : isFolder
+                ? { action: "adjacencyTrashFolder", folderId: id }
+                : { action: "adjacencyTrashItem", itemId: id }
+            ),
+          });
+        }
+      } catch {}
+    };
+    run();
   };
 
   const handleBulkRestore = () => {
@@ -406,6 +692,25 @@ export const useDrive = () => {
     );
     setSelectedItems(new Set());
     setIsSelectionMode(false);
+
+    const run = async () => {
+      try {
+        const ids = Array.from(selectedItems);
+        for (const id of ids) {
+          const isFolder = folders.some((f) => f.id === id);
+          await fetch("/api/folders-global", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(
+              isFolder
+                ? { action: "adjacencyRestoreFolder", folderId: id }
+                : { action: "adjacencyRestoreItem", itemId: id }
+            ),
+          });
+        }
+      } catch {}
+    };
+    run();
   };
 
   const handleDownload = (item: FileItem | FolderItem) => {
