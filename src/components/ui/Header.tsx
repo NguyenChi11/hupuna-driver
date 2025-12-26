@@ -1,7 +1,12 @@
+"use client";
+
 import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { ICONS } from "@/components/constants";
 import { FileItem, FolderItem } from "@/types/types";
 import { isFolder } from "@/utils/fileCard";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getProxyUrl } from "@/utils/utils";
 
 interface HeaderProps {
   onSearch: (q: string) => void;
@@ -22,6 +27,7 @@ const Header: React.FC<HeaderProps> = ({
   onSubmitSearch,
   onLogout,
 }) => {
+  const { user, logout } = useCurrentUser();
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
@@ -164,21 +170,39 @@ const Header: React.FC<HeaderProps> = ({
         <div className="relative" ref={userMenuRef}>
           <button
             onClick={() => setUserMenuOpen((v) => !v)}
-            className="cursor-pointer w-10 h-10 rounded-full bg-linear-to-tr from-blue-600 to-blue-400 flex items-center justify-center text-white font-bold text-sm shadow-md hover:shadow-lg transition"
+            className="cursor-pointer w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-blue-400 flex items-center justify-center text-white font-bold text-sm shadow-md hover:shadow-lg transition overflow-hidden"
           >
-            JD
+            {user?.avatar ? (
+              <img
+                src={getProxyUrl(user.avatar as string)}
+                alt={user.name as string}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              (user?.name as string)?.charAt(0)?.toUpperCase() || "U"
+            )}
           </button>
           {userMenuOpen && (
-            <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-xl shadow-2xl z-50">
+            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 py-1">
+              <Link
+                href="/profile"
+                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                onClick={() => setUserMenuOpen(false)}
+              >
+                <ICONS.User className="w-4 h-4" />
+                <span>Hồ sơ cá nhân</span>
+              </Link>
+              <div className="h-px bg-gray-100 my-1" />
               <button
                 type="button"
                 onClick={() => {
                   setUserMenuOpen(false);
-                  if (onLogout) onLogout();
+                  logout();
                 }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition text-left"
               >
-                Đăng xuất
+                <ICONS.Logout className="w-4 h-4" />
+                <span>Đăng xuất</span>
               </button>
             </div>
           )}

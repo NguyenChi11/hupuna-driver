@@ -11,11 +11,23 @@ export interface User {
   lastMessageAt?: number;
 
   avatar?: string;
+  background?: string;
   role?: string;
   department?: string;
   status?: string;
   online?: boolean;
   lastSeen?: number | null;
+  
+  // Profile fields
+  email?: string;
+  phone?: string;
+  address?: string;
+  birthday?: string;
+  gender?: string;
+  title?: string;
+  bio?: string;
+  createdAt?: string | number;
+
   // Các field trạng thái đã được tính sẵn từ server (tiện cho FE sử dụng)
   isPinned?: boolean;
   isHidden?: boolean;
@@ -32,6 +44,7 @@ export interface UserCreate {
   password: string;
 
   avatar?: string;
+  background?: string;
   role?: string;
   department?: string;
   status?: string;
