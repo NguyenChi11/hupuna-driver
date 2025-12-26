@@ -116,7 +116,18 @@ export const useDrive = () => {
               (i.scope === "global" ? "global" : "local") === scopeTarget
           )
           .filter((i) => !i.trashedAt);
-        resultItems = [...scopedFolders, ...scopedItems];
+
+        if (currentFolderId) {
+          resultItems = [
+            ...scopedFolders.filter((f) => f.parentId === currentFolderId),
+            ...scopedItems.filter((i) => i.parentId === currentFolderId),
+          ];
+        } else {
+          resultItems = [
+            ...scopedFolders.filter((f) => !f.parentId),
+            ...scopedItems.filter((i) => !i.parentId),
+          ];
+        }
       } else if (type === "folder") {
         resultItems = folders
           .filter(
@@ -146,7 +157,11 @@ export const useDrive = () => {
           ...currentFiles.filter((i) => i.parentId === currentFolderId),
         ];
       } else {
-        resultItems = [...currentFolders, ...currentFiles];
+        // Root view: show only items with no parent
+        resultItems = [
+          ...currentFolders.filter((f) => !f.parentId),
+          ...currentFiles.filter((i) => !i.parentId),
+        ];
       }
     }
     return resultItems;
@@ -190,7 +205,11 @@ export const useDrive = () => {
           (f: { id: string; name: string; parentId?: string }) => ({
             id: f.id,
             name: f.name,
-            parentId: f.parentId ?? null,
+            // Normalize "root" to null to match frontend state
+            parentId:
+              f.parentId === "root" || f.parentId === "undefined"
+                ? null
+                : f.parentId ?? null,
             createdAt: now,
             scope,
           })
@@ -213,15 +232,29 @@ export const useDrive = () => {
           })
         );
 
-        // Remove existing items of the same scope to avoid duplication or stale data
-        setFolders((prev) => [
-          ...prev.filter((f) => (f.scope ?? "local") !== scope),
-          ...srvFolders,
-        ]);
-        setItems((prev) => [
-          ...prev.filter((i) => (i.scope ?? "local") !== scope),
-          ...srvItems,
-        ]);
+        // Remove existing items of the same scope AND same parent to avoid duplication or stale data
+        // But keep other folders (ancestors, siblings of ancestors) so breadcrumbs work.
+        setFolders((prev) => {
+          const filtered = prev.filter(
+            (f) =>
+              (f.scope ?? "local") !== scope ||
+              f.parentId !== (currentFolderId ?? null)
+          );
+          // Deduplicate by ID just in case
+          const map = new Map<string, FolderItem>();
+          [...filtered, ...srvFolders].forEach((f) => map.set(f.id, f));
+          return Array.from(map.values());
+        });
+        setItems((prev) => {
+          const filtered = prev.filter(
+            (i) =>
+              (i.scope ?? "local") !== scope ||
+              i.parentId !== (currentFolderId ?? null)
+          );
+          const map = new Map<string, FileItem>();
+          [...filtered, ...srvItems].forEach((i) => map.set(i.id, i));
+          return Array.from(map.values());
+        });
       } catch {}
     };
     load();
@@ -666,6 +699,42 @@ export const useDrive = () => {
         prev.map((i) => (i.id === id ? { ...i, name: newName } : i))
       );
     }
+
+    const targetFolder = folders.find((f) => f.id === id);
+    const targetItem = items.find((i) => i.id === id);
+    const itemScope =
+      type === "folder"
+        ? targetFolder?.scope ?? "local"
+        : targetItem?.scope ?? "local";
+
+    const run = async () => {
+      try {
+        const isGlobal = itemScope === "global";
+        const endpoint = isGlobal ? "/api/folders-global" : "/api/folders";
+        const bodyRoom = isGlobal ? {} : { roomId };
+
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            type === "folder"
+              ? {
+                  action: "adjacencyRenameFolder",
+                  folderId: id,
+                  name: newName,
+                  ...bodyRoom,
+                }
+              : {
+                  action: "adjacencyRenameItem",
+                  itemId: id,
+                  name: newName,
+                  ...bodyRoom,
+                }
+          ),
+        });
+      } catch {}
+    };
+    run();
   };
 
   const handleOpen = (item: FileItem | FolderItem) => {

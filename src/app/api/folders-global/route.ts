@@ -562,6 +562,34 @@ export async function POST(req: NextRequest) {
         );
         return NextResponse.json({ success: true, item: saved });
       }
+      case "adjacencyRenameFolder": {
+        const folderId = String(body.folderId || "").trim();
+        const name = String(body.name || "").trim();
+        if (!folderId || !name)
+          return NextResponse.json(
+            { error: "Missing folderId or name" },
+            { status: 400 }
+          );
+        await adjFolders.updateOne(
+          { ...buildOwnerIdQuery(ownerId), id: folderId },
+          { $set: { name, updatedAt: Date.now() } }
+        );
+        return NextResponse.json({ success: true });
+      }
+      case "adjacencyRenameItem": {
+        const itemId = String(body.itemId || "").trim();
+        const name = String(body.name || "").trim();
+        if (!itemId || !name)
+          return NextResponse.json(
+            { error: "Missing itemId or name" },
+            { status: 400 }
+          );
+        await adjItems.updateOne(
+          { ...buildOwnerIdQuery(ownerId), id: itemId },
+          { $set: { name, updatedAt: Date.now() } }
+        );
+        return NextResponse.json({ success: true });
+      }
       case "read": {
         // Must ensure we target the root document, not adjacency items/folders
         const row = await collection.findOne({

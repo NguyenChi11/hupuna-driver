@@ -541,6 +541,34 @@ export async function POST(req: NextRequest) {
         );
         return NextResponse.json({ success: true, item: saved });
       }
+      case "adjacencyRenameFolder": {
+        const folderId = String(body.folderId || "").trim();
+        const name = String(body.name || "").trim();
+        if (!folderId || !name)
+          return NextResponse.json(
+            { error: "Missing folderId or name" },
+            { status: 400 }
+          );
+        await adjFolders.updateOne(
+          { ...buildRoomIdQuery(roomId), id: folderId },
+          { $set: { name, updatedAt: Date.now() } }
+        );
+        return NextResponse.json({ success: true });
+      }
+      case "adjacencyRenameItem": {
+        const itemId = String(body.itemId || "").trim();
+        const name = String(body.name || "").trim();
+        if (!itemId || !name)
+          return NextResponse.json(
+            { error: "Missing itemId or name" },
+            { status: 400 }
+          );
+        await adjItems.updateOne(
+          { ...buildRoomIdQuery(roomId), id: itemId },
+          { $set: { name, updatedAt: Date.now() } }
+        );
+        return NextResponse.json({ success: true });
+      }
       case "read": {
         const row = await collection.findOne({
           ...buildRoomIdQuery(roomId),
