@@ -4,8 +4,28 @@ import { INITIAL_FOLDERS, INITIAL_ITEMS } from "@/data/testData";
 import { STORAGE_KEY } from "@/components/constants";
 import { analyzeFileAI } from "@/service/mockAiService";
 import { getProxyUrl } from "@/utils/utils";
+import { useCurrentUser } from "./useCurrentUser";
+
+interface RawTrashFolder {
+  id: string;
+  name: string;
+  parentId?: string;
+  trashedAt?: number;
+}
+
+interface RawTrashItem {
+  id: string;
+  name?: string;
+  fileName?: string;
+  type?: "image" | "video" | "file" | "text";
+  folderId?: string;
+  fileUrl?: string;
+  trashedAt?: number;
+}
 
 export const useDrive = () => {
+  const { user } = useCurrentUser();
+  const roomId = user?._id || "";
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [items, setItems] = useState<FileItem[]>([]);
@@ -136,27 +156,38 @@ export const useDrive = () => {
 
   useEffect(() => {
     const isGlobal = sidebarSection.startsWith("global:");
-    if (!isGlobal) return;
+    if (!roomId && !isGlobal) return;
+
     const load = async () => {
       try {
-        const res = await fetch("/api/folders-global", {
+        const endpoint = isGlobal ? "/api/folders-global" : "/api/folders";
+        const body = isGlobal
+          ? {
+              action: "adjacencyRead",
+              parentId: currentFolderId ?? undefined,
+            }
+          : {
+              action: "adjacencyRead",
+              parentId: currentFolderId ?? undefined,
+              roomId,
+            };
+
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "adjacencyRead",
-            parentId: currentFolderId ?? undefined,
-          }),
+          body: JSON.stringify(body),
         });
         const json = await res.json();
         if (!json?.success) return;
         const now = Date.now();
+        const scope = isGlobal ? "global" : "local";
         const srvFolders: FolderItem[] = (json.folders || []).map(
           (f: { id: string; name: string; parentId?: string }) => ({
             id: f.id,
             name: f.name,
             parentId: f.parentId ?? null,
             createdAt: now,
-            scope: "global",
+            scope,
           })
         );
         const srvItems: FileItem[] = (json.items || []).map(
@@ -173,81 +204,89 @@ export const useDrive = () => {
             parentId: currentFolderId,
             createdAt: now,
             url: it.fileUrl ? getProxyUrl(it.fileUrl) : undefined,
-            scope: "global",
+            scope,
           })
         );
+
+        // Remove existing items of the same scope to avoid duplication or stale data
         setFolders((prev) => [
-          ...prev.filter((f) => (f.scope ?? "local") === "local"),
+          ...prev.filter((f) => (f.scope ?? "local") !== scope),
           ...srvFolders,
         ]);
         setItems((prev) => [
-          ...prev.filter((i) => (i.scope ?? "local") === "local"),
+          ...prev.filter((i) => (i.scope ?? "local") !== scope),
           ...srvItems,
         ]);
       } catch {}
     };
     load();
-  }, [sidebarSection, currentFolderId]);
+  }, [sidebarSection, currentFolderId, roomId]);
 
   useEffect(() => {
     if (sidebarSection !== "trash") return;
     const loadTrash = async () => {
       try {
-        const res = await fetch("/api/folders-global", {
+        // Load Global Trash
+        const resGlobal = await fetch("/api/folders-global", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "adjacencyReadTrash" }),
         });
-        const json = await res.json();
-        if (!json?.success) return;
+        const jsonGlobal = await resGlobal.json();
+
+        // Load Local Trash (if user logged in)
+        let jsonLocal = { folders: [], items: [] };
+        if (roomId) {
+          const resLocal = await fetch("/api/folders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "adjacencyReadTrash", roomId }),
+          });
+          jsonLocal = await resLocal.json();
+        }
+
         const now = Date.now();
-        const srvFolders: FolderItem[] = (json.folders || []).map(
-          (f: {
-            id: string;
-            name: string;
-            parentId?: string;
-            trashedAt?: number;
-          }) => ({
+
+        const mapFolders = (
+          list: RawTrashFolder[],
+          scope: "global" | "local"
+        ): FolderItem[] =>
+          (list || []).map((f) => ({
             id: f.id,
             name: f.name,
             parentId: f.parentId ?? null,
             createdAt: now,
-            scope: "global",
+            scope,
             trashedAt: f.trashedAt || now,
-          })
-        );
-        const srvItems: FileItem[] = (json.items || []).map(
-          (it: {
-            id: string;
-            name?: string;
-            type?: "image" | "video" | "file" | "text";
-            fileUrl?: string;
-            fileName?: string;
-            folderId?: string;
-            trashedAt?: number;
-          }) => ({
+          }));
+
+        const mapItems = (
+          list: RawTrashItem[],
+          scope: "global" | "local"
+        ): FileItem[] =>
+          (list || []).map((it) => ({
             id: it.id,
             name: it.name || it.fileName || "Untitled",
             type: it.type === "image" || it.type === "video" ? it.type : "file",
             parentId: it.folderId ?? null,
             createdAt: now,
             url: it.fileUrl ? getProxyUrl(it.fileUrl) : undefined,
-            scope: "global",
+            scope,
             trashedAt: it.trashedAt || now,
-          })
-        );
-        setFolders((prev) => [
-          ...prev.filter((f) => (f.scope ?? "local") === "local"),
-          ...srvFolders,
-        ]);
-        setItems((prev) => [
-          ...prev.filter((i) => (i.scope ?? "local") === "local"),
-          ...srvItems,
-        ]);
+          }));
+
+        const globalFolders = mapFolders(jsonGlobal?.folders, "global");
+        const globalItems = mapItems(jsonGlobal?.items, "global");
+        const localFolders = mapFolders(jsonLocal?.folders, "local");
+        const localItems = mapItems(jsonLocal?.items, "local");
+
+        // Replace all items since we are loading fresh trash
+        setFolders([...localFolders, ...globalFolders]);
+        setItems([...localItems, ...globalItems]);
       } catch {}
     };
     loadTrash();
-  }, [sidebarSection]);
+  }, [sidebarSection, roomId]);
 
   const searchedItems = useMemo(() => {
     let result = baseItems;
@@ -326,39 +365,38 @@ export const useDrive = () => {
     const targetParentId = currentFolderId;
 
     if (newType === "folder") {
-      if (isGlobal) {
-        try {
-          const res = await fetch("/api/folders-global", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "adjacencyCreateFolder",
-              name: newName,
-              parentId: targetParentId ?? undefined,
-            }),
-          });
-          const json = await res.json();
-          if (json?.success && json?.folder?.id) {
-            const newFolder: FolderItem = {
-              id: json.folder.id,
-              name: newName,
-              parentId: targetParentId,
-              createdAt: Date.now(),
-              scope: "global",
-            };
-            setFolders((prev) => [...prev, newFolder]);
+      const endpoint = isGlobal ? "/api/folders-global" : "/api/folders";
+      const body = isGlobal
+        ? {
+            action: "adjacencyCreateFolder",
+            name: newName,
+            parentId: targetParentId ?? undefined,
           }
-        } catch {}
-      } else {
-        const newFolder: FolderItem = {
-          id: Math.random().toString(36).slice(2, 11),
-          name: newName,
-          parentId: targetParentId,
-          createdAt: Date.now(),
-          scope: scopeTarget,
-        };
-        setFolders((prev) => [...prev, newFolder]);
-      }
+        : {
+            action: "adjacencyCreateFolder",
+            name: newName,
+            parentId: targetParentId ?? undefined,
+            roomId,
+          };
+
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        if (json?.success && json?.folder?.id) {
+          const newFolder: FolderItem = {
+            id: json.folder.id,
+            name: newName,
+            parentId: targetParentId,
+            createdAt: Date.now(),
+            scope: scopeTarget,
+          };
+          setFolders((prev) => [...prev, newFolder]);
+        }
+      } catch {}
     } else {
       setIsAnalyzing(true);
       const newItems: FileItem[] = [];
@@ -372,63 +410,60 @@ export const useDrive = () => {
           }
 
           const aiData = await analyzeFileAI(finalName, newType);
-          if (isGlobal) {
-            try {
-              const form = new FormData();
-              form.append("file", f);
-              form.append(
-                "type",
-                newType === "image" || newType === "video" || newType === "file"
-                  ? newType
-                  : "file"
-              );
-              form.append("folderId", (targetParentId ?? "root") as string);
-              const res = await fetch("/api/folders-global", {
-                method: "POST",
-                body: form,
-              });
-              const json = await res.json();
-              if (json?.success && json?.link) {
-                const link: string = json.link;
-                const itemId: string =
-                  json?.item?.id || Math.random().toString(36).substr(2, 9);
-                const finalUrl = getProxyUrl(link);
-                newItems.push({
-                  id: itemId,
-                  name: finalName,
-                  type: newType as ItemType,
-                  parentId: targetParentId,
-                  createdAt: Date.now(),
-                  url: finalUrl,
-                  size: f.size,
-                  description: aiData.description,
-                  tags: aiData.tags,
-                  scope: "global",
-                });
-              } else {
-                alert(
-                  typeof json?.message === "string" && json.message
-                    ? json.message
-                    : "Upload Mega thất bại"
-                );
-              }
-            } catch {
-              alert("Không thể kết nối API upload Mega");
+
+          try {
+            const form = new FormData();
+            form.append("file", f);
+            form.append(
+              "type",
+              newType === "image" || newType === "video" || newType === "file"
+                ? newType
+                : "file"
+            );
+            form.append("folderId", (targetParentId ?? "root") as string);
+
+            if (isGlobal) {
+              // Global upload
+              // ownerId is handled by cookie/fingerprint in backend if not passed,
+              // or we can pass it if we have it, but for now backend handles it.
+            } else {
+              // Local upload
+              form.append("roomId", roomId);
             }
-          } else {
-            const finalUrl = URL.createObjectURL(f);
-            newItems.push({
-              id: Math.random().toString(36).substr(2, 9),
-              name: finalName,
-              type: newType as ItemType,
-              parentId: targetParentId,
-              createdAt: Date.now(),
-              url: finalUrl,
-              size: f.size,
-              description: aiData.description,
-              tags: aiData.tags,
-              scope: scopeTarget,
+
+            const endpoint = isGlobal ? "/api/folders-global" : "/api/folders";
+            const res = await fetch(endpoint, {
+              method: "POST",
+              body: form,
             });
+            const json = await res.json();
+
+            if (json?.success && json?.link) {
+              const link: string = json.link;
+              const itemId: string =
+                json?.item?.id || Math.random().toString(36).substr(2, 9);
+              const finalUrl = getProxyUrl(link);
+              newItems.push({
+                id: itemId,
+                name: finalName,
+                type: newType as ItemType,
+                parentId: targetParentId,
+                createdAt: Date.now(),
+                url: finalUrl,
+                size: f.size,
+                description: aiData.description,
+                tags: aiData.tags,
+                scope: scopeTarget,
+              });
+            } else {
+              alert(
+                typeof json?.message === "string" && json.message
+                  ? json.message
+                  : "Upload thất bại"
+              );
+            }
+          } catch {
+            alert("Không thể kết nối API upload");
           }
         }
       } else {
@@ -519,27 +554,45 @@ export const useDrive = () => {
       setDeletingId(null);
     }, 400);
 
-    const isGlobal = sidebarSection.startsWith("global:") || false;
+    const targetFolder = folders.find((f) => f.id === id);
+    const targetItem = items.find((i) => i.id === id);
+    const itemScope =
+      type === "folder"
+        ? targetFolder?.scope ?? "local"
+        : targetItem?.scope ?? "local";
+
     const run = async () => {
       try {
+        const isGlobal = itemScope === "global";
+        const endpoint = isGlobal ? "/api/folders-global" : "/api/folders";
+        const bodyRoom = isGlobal ? {} : { roomId };
+
         if (sidebarSection === "trash") {
-          await fetch("/api/folders-global", {
+          await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(
               type === "folder"
-                ? { action: "adjacencyPermanentDeleteFolder", folderId: id }
-                : { action: "adjacencyPermanentDeleteItem", itemId: id }
+                ? {
+                    action: "adjacencyPermanentDeleteFolder",
+                    folderId: id,
+                    ...bodyRoom,
+                  }
+                : {
+                    action: "adjacencyPermanentDeleteItem",
+                    itemId: id,
+                    ...bodyRoom,
+                  }
             ),
           });
-        } else if (isGlobal) {
-          await fetch("/api/folders-global", {
+        } else {
+          await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(
               type === "folder"
-                ? { action: "adjacencyTrashFolder", folderId: id }
-                : { action: "adjacencyTrashItem", itemId: id }
+                ? { action: "adjacencyTrashFolder", folderId: id, ...bodyRoom }
+                : { action: "adjacencyTrashItem", itemId: id, ...bodyRoom }
             ),
           });
         }
@@ -563,16 +616,31 @@ export const useDrive = () => {
       setDeletingId(null);
     }, 400);
 
+    const targetFolder = folders.find((f) => f.id === id);
+    const targetItem = items.find((i) => i.id === id);
+    const itemScope =
+      type === "folder"
+        ? targetFolder?.scope ?? "local"
+        : targetItem?.scope ?? "local";
+
     const run = async () => {
       try {
-        await fetch("/api/folders-global", {
+        const isGlobal = itemScope === "global";
+        const endpoint = isGlobal ? "/api/folders-global" : "/api/folders";
+        const bodyBase = type === "folder" ? { folderId: id } : { itemId: id };
+        const bodyRoom = isGlobal ? {} : { roomId };
+
+        await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            type === "folder"
-              ? { action: "adjacencyRestoreFolder", folderId: id }
-              : { action: "adjacencyRestoreItem", itemId: id }
-          ),
+          body: JSON.stringify({
+            action:
+              type === "folder"
+                ? "adjacencyRestoreFolder"
+                : "adjacencyRestoreItem",
+            ...bodyBase,
+            ...bodyRoom,
+          }),
         });
       } catch {}
     };

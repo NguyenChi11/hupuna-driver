@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/components/(mongodb)/connectToDatabase";
+import { Storage } from "megajs";
 
 export const runtime = "nodejs";
 
-const FOLDER_COLLECTION = "Folders";
+const FOLDER_COLLECTION = "PrivateDriver";
 
 type ItemType = "video" | "image" | "file" | "text";
 type Item = {
@@ -24,7 +25,7 @@ type FolderNode = {
   createdAt?: number;
   updatedAt?: number;
 };
-type ChatFlashDoc = {
+type FolderDoc = {
   _id?: string;
   roomId: string;
   root: FolderNode;
@@ -85,17 +86,182 @@ function updateFolderById(
   };
 }
 
+function genId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function uploadToMegaInline(
+  fileBuffer: Buffer,
+  originalFileName: string,
+  fileSize: number,
+  subFolderName: string
+) {
+  const pickCreds = (ownerKey: string) => {
+    const baseEmail = (process.env.MEGA_EMAIL || "").trim();
+    const basePassword = (process.env.MEGA_PASSWORD || "").trim();
+    const emails: string[] = [];
+    const passwords: string[] = [];
+    for (let i = 1; i <= 5; i++) {
+      const e = (process.env[`MEGA_EMAIL_${i}`] || "").trim();
+      const p = (process.env[`MEGA_PASSWORD_${i}`] || "").trim();
+      if (e && p) {
+        emails.push(e);
+        passwords.push(p);
+      }
+    }
+    if (!emails.length && baseEmail && basePassword) {
+      return { email: baseEmail, password: basePassword };
+    }
+    if (emails.length) {
+      let hash = 0;
+      for (let i = 0; i < ownerKey.length; i++) {
+        hash = (hash << 5) - hash + ownerKey.charCodeAt(i);
+        hash |= 0;
+      }
+      const idx = Math.abs(hash) % emails.length;
+      return { email: emails[idx], password: passwords[idx] };
+    }
+    return { email: baseEmail, password: basePassword };
+  };
+  const creds = pickCreds(subFolderName);
+  const email = creds.email;
+  const password = creds.password;
+  const masterFolder = (process.env.MASTER_FOLDER_NAME || "Uploads").trim();
+  if (!email || !password) {
+    throw new Error("Missing MEGA_EMAIL/MEGA_PASSWORD");
+  }
+  const storage = new Storage({ email, password });
+  const ready = new Promise<void>((resolve, reject) => {
+    storage.on("ready", () => resolve());
+    storage.on("error" as never, (err) => reject(err));
+  });
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Mega login timeout")), 15000)
+  );
+  await Promise.race([ready, timeout]);
+  let master = storage.root.children?.find(
+    (n) => n.name === masterFolder && n.directory
+  );
+  if (!master) master = await storage.mkdir(masterFolder);
+  const safeSub =
+    subFolderName && subFolderName.trim() ? subFolderName.trim() : "Default";
+  let target = master.children?.find((n) => n.name === safeSub && n.directory);
+  if (!target) target = await master.mkdir(safeSub);
+
+  const name = originalFileName?.trim() || `file_${Date.now()}`;
+  const task = target.upload({ name, size: fileSize }, fileBuffer);
+  const link = await new Promise<string>((resolve, reject) => {
+    task.on(
+      "complete",
+      (uploadedFile: {
+        link: (
+          isPublic: boolean,
+          cb: (err: Error | null, url: string) => void
+        ) => void;
+      }) => {
+        uploadedFile.link(false, (err, url) => {
+          if (err) reject(err);
+          else resolve(url);
+        });
+      }
+    );
+    task.on("error", (err: Error) => reject(err));
+  });
+  return { link, fileName: name, folderPath: `${masterFolder}/${safeSub}` };
+}
+
 export async function POST(req: NextRequest) {
   try {
+    const ct = req.headers.get("content-type") || "";
+    // Multipart upload path for items -> push to Mega and save adjacency item
+    if (ct.includes("multipart/form-data")) {
+      const form = await req.formData();
+      const file = form.get("file") as unknown;
+      const typeRaw = String(form.get("type") || "file").trim();
+      const folderId = String(form.get("folderId") || "root").trim();
+      const roomId = String(form.get("roomId") || "").trim();
+
+      if (!roomId) {
+        return NextResponse.json({ error: "Missing roomId" }, { status: 400 });
+      }
+
+      const isValidFile =
+        file &&
+        typeof (file as { arrayBuffer?: () => Promise<ArrayBuffer> })
+          .arrayBuffer === "function" &&
+        typeof (file as { name?: string }).name === "string";
+      if (!isValidFile) {
+        return NextResponse.json({ error: "Missing file" }, { status: 400 });
+      }
+      const arrayBuffer = await (
+        file as { arrayBuffer: () => Promise<ArrayBuffer> }
+      ).arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const { db } = await connectToDatabase();
+      const subFolderName = `folder-${roomId}-${folderId}`;
+      let uploadRes: {
+        link: string;
+        fileName: string;
+        folderPath: string;
+      } | null = null;
+      try {
+        uploadRes = await uploadToMegaInline(
+          buffer,
+          (file as { name: string }).name,
+          buffer.length,
+          subFolderName
+        );
+      } catch (e) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: (e as Error)?.message || "Mega upload failed",
+          },
+          { status: 500 }
+        );
+      }
+      const items = db.collection(FOLDER_COLLECTION);
+      const itemId = genId("i");
+      const now = Date.now();
+      await items.insertOne({
+        roomId,
+        id: itemId,
+        folderId,
+        type: ["image", "video", "file", "text"].includes(typeRaw)
+          ? typeRaw
+          : "file",
+        name: (file as { name: string }).name,
+        fileName: (file as { name: string }).name,
+        fileUrl: uploadRes.link,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return NextResponse.json({
+        success: true,
+        link: uploadRes.link,
+        item: {
+          id: itemId,
+          name: (file as { name: string }).name,
+          type: typeRaw,
+          fileUrl: uploadRes.link,
+          fileName: (file as { name: string }).name,
+        },
+      });
+    }
+
     const body = await req.json();
     const action = String(body.action || "").trim();
     const roomId = String(body.roomId || "").trim();
 
     if (!action)
       return NextResponse.json({ error: "Missing action" }, { status: 400 });
+    if (!roomId)
+      return NextResponse.json({ error: "Missing roomId" }, { status: 400 });
 
     const { db } = await connectToDatabase();
-    const collection = db.collection<ChatFlashDoc>(FOLDER_COLLECTION);
+    const collection = db.collection<FolderDoc>(FOLDER_COLLECTION);
+    const adjFolders = db.collection(FOLDER_COLLECTION);
+    const adjItems = db.collection(FOLDER_COLLECTION);
 
     const toUiFolder = (
       n: FolderNode
@@ -148,13 +314,238 @@ export async function POST(req: NextRequest) {
     };
 
     switch (action) {
-      case "read": {
-        if (!roomId)
+      case "adjacencyRead": {
+        const parentId = String(body.parentId || "root").trim();
+        const folders = await adjFolders
+          .find({
+            ...buildRoomIdQuery(roomId),
+            parentId,
+            trashedAt: { $exists: false },
+          })
+          .project({ _id: 0, id: 1, name: 1, parentId: 1 })
+          .toArray();
+        const items = await adjItems
+          .find({
+            ...buildRoomIdQuery(roomId),
+            folderId: parentId,
+            trashedAt: { $exists: false },
+          })
+          .project({
+            _id: 0,
+            id: 1,
+            name: 1,
+            type: 1,
+            fileUrl: 1,
+            fileName: 1,
+          })
+          .toArray();
+        return NextResponse.json({
+          success: true,
+          folders,
+          items,
+        });
+      }
+      case "adjacencyReadTrash": {
+        const folders = await adjFolders
+          .find({
+            ...buildRoomIdQuery(roomId),
+            trashedAt: { $exists: true },
+          })
+          .project({ _id: 0, id: 1, name: 1, parentId: 1, trashedAt: 1 })
+          .toArray();
+        const items = await adjItems
+          .find({
+            ...buildRoomIdQuery(roomId),
+            trashedAt: { $exists: true },
+          })
+          .project({
+            _id: 0,
+            id: 1,
+            name: 1,
+            type: 1,
+            fileUrl: 1,
+            fileName: 1,
+            folderId: 1,
+            trashedAt: 1,
+          })
+          .toArray();
+        return NextResponse.json({ success: true, folders, items });
+      }
+      case "adjacencyCreateFolder": {
+        const name = String(body.name || "").trim();
+        const parentId = String(body.parentId || "root").trim();
+        if (!name)
+          return NextResponse.json({ error: "Missing name" }, { status: 400 });
+        const id = genId("f");
+        const now = Date.now();
+        await adjFolders.insertOne({
+          roomId,
+          id,
+          name,
+          parentId,
+          createdAt: now,
+          updatedAt: now,
+        });
+        return NextResponse.json({
+          success: true,
+          folder: { id, name, parentId },
+        });
+      }
+      case "adjacencyTrashFolder": {
+        const folderId = String(body.folderId || "").trim();
+        if (!folderId)
           return NextResponse.json(
-            { error: "Missing roomId" },
+            { error: "Missing folderId" },
             { status: 400 }
           );
-        const row = await collection.findOne(buildRoomIdQuery(roomId));
+        const now = Date.now();
+        await adjFolders.updateOne(
+          { ...buildRoomIdQuery(roomId), id: folderId },
+          { $set: { trashedAt: now, updatedAt: now } }
+        );
+        return NextResponse.json({ success: true });
+      }
+      case "adjacencyTrashItem": {
+        const itemId = String(body.itemId || "").trim();
+        if (!itemId)
+          return NextResponse.json(
+            { error: "Missing itemId" },
+            { status: 400 }
+          );
+        const now = Date.now();
+        await adjItems.updateOne(
+          { ...buildRoomIdQuery(roomId), id: itemId },
+          { $set: { trashedAt: now, updatedAt: now } }
+        );
+        return NextResponse.json({ success: true });
+      }
+      case "adjacencyRestoreFolder": {
+        const folderId = String(body.folderId || "").trim();
+        if (!folderId)
+          return NextResponse.json(
+            { error: "Missing folderId" },
+            { status: 400 }
+          );
+        await adjFolders.updateOne(
+          { ...buildRoomIdQuery(roomId), id: folderId },
+          { $unset: { trashedAt: "" } }
+        );
+        return NextResponse.json({ success: true });
+      }
+      case "adjacencyRestoreItem": {
+        const itemId = String(body.itemId || "").trim();
+        if (!itemId)
+          return NextResponse.json(
+            { error: "Missing itemId" },
+            { status: 400 }
+          );
+        await adjItems.updateOne(
+          { ...buildRoomIdQuery(roomId), id: itemId },
+          { $unset: { trashedAt: "" } }
+        );
+        return NextResponse.json({ success: true });
+      }
+      case "adjacencyPermanentDeleteItem": {
+        const itemId = String(body.itemId || "").trim();
+        if (!itemId)
+          return NextResponse.json(
+            { error: "Missing itemId" },
+            { status: 400 }
+          );
+        await adjItems.deleteOne({ ...buildRoomIdQuery(roomId), id: itemId });
+        return NextResponse.json({ success: true });
+      }
+      case "adjacencyPermanentDeleteFolder": {
+        const folderId = String(body.folderId || "").trim();
+        if (!folderId)
+          return NextResponse.json(
+            { error: "Missing folderId" },
+            { status: 400 }
+          );
+        // Collect all descendant folders
+        const allFolderIds: string[] = [folderId];
+        while (true) {
+          const children = await adjFolders
+            .find({
+              ...buildRoomIdQuery(roomId),
+              parentId: { $in: allFolderIds },
+            })
+            .project({ _id: 0, id: 1 })
+            .toArray();
+          const newIds = children
+            .map((c) => c.id)
+            .filter((id) => !allFolderIds.includes(id));
+          if (newIds.length === 0) break;
+          allFolderIds.push(...newIds);
+        }
+        // Delete items in all folders
+        await adjItems.deleteMany({
+          ...buildRoomIdQuery(roomId),
+          folderId: { $in: allFolderIds },
+        });
+        // Delete folders
+        await adjFolders.deleteMany({
+          ...buildRoomIdQuery(roomId),
+          id: { $in: allFolderIds },
+        });
+        return NextResponse.json({
+          success: true,
+          deletedFolderIds: allFolderIds,
+        });
+      }
+      case "adjacencyUpsertItem": {
+        const folderId = String(body.folderId || "root").trim();
+        const itemId = String(body.itemId || genId("i")).trim();
+        const type = String(body.type || "file").trim();
+        const name = typeof body.name === "string" ? body.name : undefined;
+        const url = typeof body.url === "string" ? body.url : undefined;
+        const fileName =
+          typeof body.fileName === "string" ? body.fileName : name;
+        if (!folderId || !type)
+          return NextResponse.json(
+            { error: "Missing folderId or type" },
+            { status: 400 }
+          );
+        const now = Date.now();
+        await adjItems.updateOne(
+          { roomId, id: itemId },
+          {
+            $set: {
+              roomId,
+              id: itemId,
+              folderId,
+              type: ["image", "video", "file", "text"].includes(type)
+                ? type
+                : "file",
+              name,
+              fileUrl: url,
+              fileName,
+              updatedAt: now,
+            },
+            $setOnInsert: { createdAt: now },
+          },
+          { upsert: true }
+        );
+        const saved = await adjItems.findOne(
+          { roomId, id: itemId },
+          {
+            projection: {
+              _id: 0,
+              id: 1,
+              name: 1,
+              type: 1,
+              fileUrl: 1,
+              fileName: 1,
+            },
+          }
+        );
+        return NextResponse.json({ success: true, item: saved });
+      }
+      case "read": {
+        const row = await collection.findOne({
+          ...buildRoomIdQuery(roomId),
+          root: { $exists: true },
+        });
         if (!row) {
           const now = Date.now();
           const root: FolderNode = {
@@ -180,17 +571,15 @@ export async function POST(req: NextRequest) {
         });
       }
       case "createFolder": {
-        if (!roomId)
-          return NextResponse.json(
-            { error: "Missing roomId" },
-            { status: 400 }
-          );
         const parentId = String(body.parentId || "root").trim();
         const name = String(body.name || "").trim();
         if (!name)
           return NextResponse.json({ error: "Missing name" }, { status: 400 });
 
-        const existing = await collection.findOne(buildRoomIdQuery(roomId));
+        const existing = await collection.findOne({
+          ...buildRoomIdQuery(roomId),
+          root: { $exists: true },
+        });
         const now = Date.now();
         const baseRoot: FolderNode = existing?.root || {
           id: "root",
@@ -239,11 +628,6 @@ export async function POST(req: NextRequest) {
         });
       }
       case "renameFolder": {
-        if (!roomId)
-          return NextResponse.json(
-            { error: "Missing roomId" },
-            { status: 400 }
-          );
         const folderId = String(body.folderId || "").trim();
         const name = String(body.name || "").trim();
         if (!folderId || !name)
@@ -252,7 +636,10 @@ export async function POST(req: NextRequest) {
             { status: 400 }
           );
 
-        const existing = await collection.findOne(buildRoomIdQuery(roomId));
+        const existing = await collection.findOne({
+          ...buildRoomIdQuery(roomId),
+          root: { $exists: true },
+        });
         const now = Date.now();
         const baseRoot: FolderNode = existing?.root || {
           id: "root",
@@ -280,11 +667,6 @@ export async function POST(req: NextRequest) {
         });
       }
       case "deleteFolder": {
-        if (!roomId)
-          return NextResponse.json(
-            { error: "Missing roomId" },
-            { status: 400 }
-          );
         const folderId = String(body.folderId || "").trim();
         if (!folderId)
           return NextResponse.json(
@@ -292,7 +674,10 @@ export async function POST(req: NextRequest) {
             { status: 400 }
           );
 
-        const existing = await collection.findOne(buildRoomIdQuery(roomId));
+        const existing = await collection.findOne({
+          ...buildRoomIdQuery(roomId),
+          root: { $exists: true },
+        });
         const now = Date.now();
         const baseRoot: FolderNode = existing?.root || {
           id: "root",
@@ -320,11 +705,6 @@ export async function POST(req: NextRequest) {
         });
       }
       case "listItems": {
-        if (!roomId)
-          return NextResponse.json(
-            { error: "Missing roomId" },
-            { status: 400 }
-          );
         const folderId = String(body.folderId || "").trim();
         if (!folderId)
           return NextResponse.json(
@@ -332,7 +712,10 @@ export async function POST(req: NextRequest) {
             { status: 400 }
           );
 
-        const existing = await collection.findOne(buildRoomIdQuery(roomId));
+        const existing = await collection.findOne({
+          ...buildRoomIdQuery(roomId),
+          root: { $exists: true },
+        });
         const baseRoot: FolderNode = existing?.root || {
           id: "root",
           name: "root",
@@ -364,11 +747,6 @@ export async function POST(req: NextRequest) {
       case "updateImage":
       case "updateVideo":
       case "updateFile": {
-        if (!roomId)
-          return NextResponse.json(
-            { error: "Missing roomId" },
-            { status: 400 }
-          );
         const folderId = String(body.folderId || "").trim();
         const itemId =
           String(body.itemId || "").trim() ||
@@ -390,7 +768,10 @@ export async function POST(req: NextRequest) {
         const content =
           typeof body.content === "string" ? body.content : undefined;
 
-        const existing = await collection.findOne(buildRoomIdQuery(roomId));
+        const existing = await collection.findOne({
+          ...buildRoomIdQuery(roomId),
+          root: { $exists: true },
+        });
         const now = Date.now();
         const baseRoot: FolderNode = existing?.root || {
           id: "root",
@@ -441,11 +822,6 @@ export async function POST(req: NextRequest) {
         });
       }
       case "deleteItem": {
-        if (!roomId)
-          return NextResponse.json(
-            { error: "Missing roomId" },
-            { status: 400 }
-          );
         const folderId = String(body.folderId || "").trim();
         const itemId = String(body.itemId || "").trim();
         if (!folderId || !itemId)
@@ -454,7 +830,10 @@ export async function POST(req: NextRequest) {
             { status: 400 }
           );
 
-        const existing = await collection.findOne(buildRoomIdQuery(roomId));
+        const existing = await collection.findOne({
+          ...buildRoomIdQuery(roomId),
+          root: { $exists: true },
+        });
         const now = Date.now();
         const baseRoot: FolderNode = existing?.root || {
           id: "root",
