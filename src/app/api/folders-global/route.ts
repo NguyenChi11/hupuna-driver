@@ -337,20 +337,30 @@ export async function POST(req: NextRequest) {
     switch (action) {
       case "adjacencyRead": {
         const parentId = String(body.parentId || "root").trim();
+        const recursive = !!body.recursive;
+
+        const folderQuery: Record<string, unknown> = {
+          ...buildOwnerIdQuery(ownerId),
+          trashedAt: { $exists: false },
+          type: { $exists: false },
+        };
+        const itemQuery: Record<string, unknown> = {
+          ...buildOwnerIdQuery(ownerId),
+          trashedAt: { $exists: false },
+          type: { $in: ["image", "video", "file", "text"] },
+        };
+
+        if (!recursive) {
+          folderQuery.parentId = parentId;
+          itemQuery.folderId = parentId;
+        }
+
         const folders = await adjFolders
-          .find({
-            ...buildOwnerIdQuery(ownerId),
-            parentId,
-            trashedAt: { $exists: false },
-          })
+          .find(folderQuery)
           .project({ _id: 0, id: 1, name: 1, parentId: 1 })
           .toArray();
         const items = await adjItems
-          .find({
-            ...buildOwnerIdQuery(ownerId),
-            folderId: parentId,
-            trashedAt: { $exists: false },
-          })
+          .find(itemQuery)
           .project({
             _id: 0,
             id: 1,
@@ -358,6 +368,7 @@ export async function POST(req: NextRequest) {
             type: 1,
             fileUrl: 1,
             fileName: 1,
+            folderId: 1,
           })
           .toArray();
         return NextResponse.json({
@@ -371,6 +382,7 @@ export async function POST(req: NextRequest) {
           .find({
             ...buildOwnerIdQuery(ownerId),
             trashedAt: { $exists: true },
+            type: { $exists: false },
           })
           .project({ _id: 0, id: 1, name: 1, parentId: 1, trashedAt: 1 })
           .toArray();
@@ -378,6 +390,7 @@ export async function POST(req: NextRequest) {
           .find({
             ...buildOwnerIdQuery(ownerId),
             trashedAt: { $exists: true },
+            type: { $in: ["image", "video", "file", "text"] },
           })
           .project({
             _id: 0,

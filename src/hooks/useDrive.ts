@@ -124,16 +124,28 @@ export const useDrive = () => {
           ];
         } else {
           resultItems = [
-            ...scopedFolders.filter((f) => !f.parentId),
-            ...scopedItems.filter((i) => !i.parentId),
+            ...scopedFolders.filter(
+              (f) => !f.parentId || f.parentId === "root"
+            ),
+            ...scopedItems,
           ];
         }
       } else if (type === "folder") {
-        resultItems = folders
+        const scopedFolders = folders
           .filter(
             (f) => (f.scope === "global" ? "global" : "local") === scopeTarget
           )
           .filter((f) => !f.trashedAt);
+
+        if (currentFolderId) {
+          resultItems = scopedFolders.filter(
+            (f) => f.parentId === currentFolderId
+          );
+        } else {
+          resultItems = scopedFolders.filter(
+            (f) => !f.parentId || f.parentId === "root"
+          );
+        }
       } else {
         resultItems = items
           .filter(
@@ -159,8 +171,8 @@ export const useDrive = () => {
       } else {
         // Root view: show only items with no parent
         resultItems = [
-          ...currentFolders.filter((f) => !f.parentId),
-          ...currentFiles.filter((i) => !i.parentId),
+          ...currentFolders.filter((f) => !f.parentId || f.parentId === "root"),
+          ...currentFiles,
         ];
       }
     }
@@ -180,16 +192,22 @@ export const useDrive = () => {
 
     const load = async () => {
       try {
+          const type = isGlobal ? sidebarSection.slice(7) : sidebarSection;
+        const isCategory = ["image", "video", "link", "file"].includes(type);
+        const isRecursive = !currentFolderId || isCategory;
+
         const endpoint = isGlobal ? "/api/folders-global" : "/api/folders";
         const body = isGlobal
           ? {
               action: "adjacencyRead",
               parentId: currentFolderId ?? undefined,
+              recursive: isRecursive,
             }
           : {
               action: "adjacencyRead",
               parentId: currentFolderId ?? undefined,
               roomId,
+              recursive: isRecursive,
             };
 
         const res = await fetch(endpoint, {
@@ -221,11 +239,18 @@ export const useDrive = () => {
             type?: "image" | "video" | "file" | "text";
             fileUrl?: string;
             fileName?: string;
+            folderId?: string;
           }) => ({
             id: it.id,
             name: it.name || it.fileName || "Untitled",
-            type: it.type === "image" || it.type === "video" ? it.type : "file",
-            parentId: currentFolderId,
+            type:
+              it.type === "image" || it.type === "video"
+                ? it.type
+                : it.type === "text"
+                ? "link"
+                : "file",
+            parentId:
+              it.folderId === "root" || !it.folderId ? null : it.folderId,
             createdAt: now,
             url: it.fileUrl ? getProxyUrl(it.fileUrl) : undefined,
             scope,
@@ -234,7 +259,18 @@ export const useDrive = () => {
 
         // Remove existing items of the same scope AND same parent to avoid duplication or stale data
         // But keep other folders (ancestors, siblings of ancestors) so breadcrumbs work.
+
         setFolders((prev) => {
+          // If recursive (root load), we got ALL folders for this scope, so replace all of this scope
+          if (isRecursive) {
+            const otherScope = prev.filter(
+              (f) => (f.scope ?? "local") !== scope
+            );
+            // Deduplicate srvFolders itself just in case? Usually not needed if backend is good.
+            // But we merge with otherScope.
+            return [...otherScope, ...srvFolders];
+          }
+
           const filtered = prev.filter(
             (f) =>
               (f.scope ?? "local") !== scope ||
@@ -246,6 +282,13 @@ export const useDrive = () => {
           return Array.from(map.values());
         });
         setItems((prev) => {
+          if (isRecursive) {
+            const otherScope = prev.filter(
+              (i) => (i.scope ?? "local") !== scope
+            );
+            return [...otherScope, ...srvItems];
+          }
+
           const filtered = prev.filter(
             (i) =>
               (i.scope ?? "local") !== scope ||
@@ -516,48 +559,64 @@ export const useDrive = () => {
         }
 
         const aiData = await analyzeFileAI(finalName, newType);
-        if (isGlobal) {
-          try {
-            if (newType === "link") {
-              await fetch("/api/folders-global", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+
+        try {
+          if (newType === "link") {
+            const endpoint = isGlobal ? "/api/folders-global" : "/api/folders";
+            const body = isGlobal
+              ? {
                   action: "adjacencyUpsertItem",
                   folderId: (targetParentId ?? "root") as string,
-                  type: "file",
+                  type: "text",
                   name: finalName,
                   url: newUrl,
-                }),
+                }
+              : {
+                  action: "adjacencyUpsertItem",
+                  folderId: (targetParentId ?? "root") as string,
+                  type: "text",
+                  name: finalName,
+                  url: newUrl,
+                  roomId,
+                };
+
+            const res = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            const json = await res.json();
+            if (json?.success && json?.item) {
+              const savedItem = json.item;
+              newItems.push({
+                id: savedItem.id,
+                name: savedItem.name || finalName,
+                type: "link",
+                parentId: targetParentId,
+                createdAt: savedItem.createdAt || Date.now(),
+                url: savedItem.fileUrl || newUrl,
+                size: undefined,
+                description: aiData.description,
+                tags: aiData.tags,
+                scope: scopeTarget,
               });
             }
-          } catch {}
-          newItems.push({
-            id: Math.random().toString(36).substr(2, 9),
-            name: finalName,
-            type: newType as ItemType,
-            parentId: targetParentId,
-            createdAt: Date.now(),
-            url: newType === "link" ? newUrl : undefined,
-            size: undefined,
-            description: aiData.description,
-            tags: aiData.tags,
-            scope: "global",
-          });
-        } else {
-          newItems.push({
-            id: Math.random().toString(36).substr(2, 9),
-            name: finalName,
-            type: newType as ItemType,
-            parentId: targetParentId,
-            createdAt: Date.now(),
-            url: newUrl,
-            size: undefined,
-            description: aiData.description,
-            tags: aiData.tags,
-            scope: scopeTarget,
-          });
-        }
+          } else {
+            // Local file placeholder if needed, or if we handled other types differently
+            newItems.push({
+              id: Math.random().toString(36).substr(2, 9),
+              name: finalName,
+              type: newType as ItemType,
+              parentId: targetParentId,
+              createdAt: Date.now(),
+              url: newUrl,
+              size: undefined,
+              description: aiData.description,
+              tags: aiData.tags,
+              scope: scopeTarget,
+            });
+          }
+        } catch {}
       }
 
       setItems((prev) => [...prev, ...newItems]);
