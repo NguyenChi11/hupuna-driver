@@ -9,6 +9,7 @@ interface RawTrashFolder {
   name: string;
   parentId?: string;
   trashedAt?: number;
+  starred?: boolean;
 }
 
 interface RawTrashItem {
@@ -19,6 +20,7 @@ interface RawTrashItem {
   folderId?: string;
   fileUrl?: string;
   trashedAt?: number;
+  starred?: boolean;
 }
 
 export const useDrive = () => {
@@ -36,6 +38,7 @@ export const useDrive = () => {
   const [newUrl, setNewUrl] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -249,7 +252,12 @@ export const useDrive = () => {
         const now = Date.now();
         const scope = isGlobal ? "global" : "local";
         let srvFolders: FolderItem[] = (json.folders || []).map(
-          (f: { id: string; name: string; parentId?: string }) => ({
+          (f: {
+            id: string;
+            name: string;
+            parentId?: string;
+            starred?: boolean;
+          }) => ({
             id: f.id,
             name: f.name,
             // Normalize "root" to null to match frontend state
@@ -259,6 +267,7 @@ export const useDrive = () => {
                 : f.parentId ?? null,
             createdAt: now,
             scope,
+            starred: f.starred,
             authorId: isGlobal ? undefined : user?._id,
             authorName: isGlobal ? undefined : user?.name,
             authorAvatar: isGlobal
@@ -274,6 +283,7 @@ export const useDrive = () => {
             fileUrl?: string;
             fileName?: string;
             folderId?: string;
+            starred?: boolean;
           }) => ({
             id: it.id,
             name: it.name || it.fileName || "Untitled",
@@ -288,6 +298,7 @@ export const useDrive = () => {
             createdAt: now,
             url: it.fileUrl ? getProxyUrl(it.fileUrl) : undefined,
             scope,
+            starred: it.starred,
             authorId: isGlobal ? undefined : user?._id,
             authorName: isGlobal ? undefined : user?.name,
             authorAvatar: isGlobal
@@ -438,6 +449,7 @@ export const useDrive = () => {
             createdAt: now,
             scope,
             trashedAt: f.trashedAt || now,
+            starred: f.starred,
           }));
 
         const mapItems = (
@@ -453,6 +465,7 @@ export const useDrive = () => {
             url: it.fileUrl ? getProxyUrl(it.fileUrl) : undefined,
             scope,
             trashedAt: it.trashedAt || now,
+            starred: it.starred,
           }));
 
         let globalFolders = mapFolders(jsonGlobal?.folders, "global");
@@ -500,6 +513,95 @@ export const useDrive = () => {
     };
     loadTrash();
   }, [sidebarSection, roomId]);
+
+  useEffect(() => {
+    if (sidebarSection !== "starred") return;
+
+    const loadStarred = async () => {
+      try {
+        setIsLoading(true);
+
+        // Load Global Starred
+        const resGlobal = await fetch("/api/folders-global", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "adjacencyReadStarred" }),
+        });
+        const jsonGlobal = await resGlobal.json();
+
+        // Load Local Starred
+        let jsonLocal = { folders: [], items: [] };
+        if (roomId) {
+          const resLocal = await fetch("/api/folders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "adjacencyReadStarred", roomId }),
+          });
+          jsonLocal = await resLocal.json();
+        }
+
+        const now = Date.now();
+        const mapFolders = (
+          list: any[],
+          scope: "global" | "local"
+        ): FolderItem[] =>
+          (list || []).map((f) => ({
+            id: f.id,
+            name: f.name,
+            parentId: f.parentId || null,
+            createdAt: now,
+            scope,
+            starred: true,
+            trashedAt: undefined,
+            authorId:
+              f.authorId || (scope === "global" ? undefined : user?._id),
+            authorName:
+              f.authorName || (scope === "global" ? undefined : user?.name),
+            authorAvatar:
+              f.authorAvatar || (scope === "global" ? undefined : user?.avatar),
+          }));
+
+        const mapItems = (list: any[], scope: "global" | "local"): FileItem[] =>
+          (list || []).map((it) => ({
+            id: it.id,
+            name: it.name || it.fileName || "Untitled",
+            type:
+              it.type === "image" || it.type === "video"
+                ? it.type
+                : it.type === "text"
+                ? "link"
+                : "file",
+            parentId: it.folderId || null,
+            createdAt: now,
+            url: it.fileUrl ? getProxyUrl(it.fileUrl) : undefined,
+            scope,
+            starred: true,
+            trashedAt: undefined,
+            authorId:
+              it.authorId || (scope === "global" ? undefined : user?._id),
+            authorName:
+              it.authorName || (scope === "global" ? undefined : user?.name),
+            authorAvatar:
+              it.authorAvatar ||
+              (scope === "global" ? undefined : user?.avatar),
+          }));
+
+        const srvFoldersGlobal = mapFolders(jsonGlobal.folders, "global");
+        const srvItemsGlobal = mapItems(jsonGlobal.items, "global");
+
+        const srvFoldersLocal = mapFolders(jsonLocal.folders, "local");
+        const srvItemsLocal = mapItems(jsonLocal.items, "local");
+
+        setFolders([...srvFoldersGlobal, ...srvFoldersLocal]);
+        setItems([...srvItemsGlobal, ...srvItemsLocal]);
+      } catch (err) {
+        console.error("loadStarred error", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadStarred();
+  }, [sidebarSection, roomId, user]);
 
   const searchedItems = useMemo(() => {
     let result = baseItems;
@@ -1142,15 +1244,65 @@ export const useDrive = () => {
   };
 
   const handleToggleStar = (id: string, type: "item" | "folder") => {
+    let isStarred = false;
     if (type === "folder") {
       setFolders((prev) =>
-        prev.map((f) => (f.id === id ? { ...f, starred: !f.starred } : f))
+        prev.map((f) => {
+          if (f.id === id) {
+            isStarred = !f.starred;
+            return { ...f, starred: !f.starred };
+          }
+          return f;
+        })
       );
     } else {
       setItems((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, starred: !i.starred } : i))
+        prev.map((i) => {
+          if (i.id === id) {
+            isStarred = !i.starred;
+            return { ...i, starred: !i.starred };
+          }
+          return i;
+        })
       );
     }
+
+    const run = async () => {
+      try {
+        let itemScope = "local";
+        if (type === "folder") {
+          const f = folders.find((x) => x.id === id);
+          itemScope = f?.scope || "local";
+        } else {
+          const i = items.find((x) => x.id === id);
+          itemScope = i?.scope || "local";
+        }
+        const isGlobal = itemScope === "global";
+        const endpoint = isGlobal ? "/api/folders-global" : "/api/folders";
+        const bodyRoom = isGlobal ? {} : { roomId };
+
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            type === "folder"
+              ? {
+                  action: "adjacencyToggleStarFolder",
+                  folderId: id,
+                  starred: isStarred,
+                  ...bodyRoom,
+                }
+              : {
+                  action: "adjacencyToggleStarItem",
+                  itemId: id,
+                  starred: isStarred,
+                  ...bodyRoom,
+                }
+          ),
+        });
+      } catch {}
+    };
+    run();
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -1227,6 +1379,7 @@ export const useDrive = () => {
     newUrl,
     files,
     isAnalyzing,
+    isLoading,
     deletingId,
     selectedItems,
     isSelectionMode,

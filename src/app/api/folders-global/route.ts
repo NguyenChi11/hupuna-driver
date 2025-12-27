@@ -18,6 +18,7 @@ type Item = {
   authorName?: string;
   authorAvatar?: string;
   updatedAt: number;
+  starred?: boolean;
 };
 type FolderNode = {
   id: string;
@@ -27,6 +28,7 @@ type FolderNode = {
   items: Item[];
   createdAt?: number;
   updatedAt?: number;
+  starred?: boolean;
   authorId?: string;
   authorName?: string;
   authorAvatar?: string;
@@ -386,6 +388,7 @@ export async function POST(req: NextRequest) {
             authorId: 1,
             authorName: 1,
             authorAvatar: 1,
+            starred: 1,
           })
           .toArray();
         const items = await adjItems
@@ -401,6 +404,7 @@ export async function POST(req: NextRequest) {
             authorId: 1,
             authorName: 1,
             authorAvatar: 1,
+            starred: 1,
           })
           .toArray();
         return NextResponse.json({
@@ -425,6 +429,7 @@ export async function POST(req: NextRequest) {
             authorId: 1,
             authorName: 1,
             authorAvatar: 1,
+            starred: 1,
           })
           .toArray();
         const items = await adjItems
@@ -445,9 +450,80 @@ export async function POST(req: NextRequest) {
             authorId: 1,
             authorName: 1,
             authorAvatar: 1,
+            starred: 1,
           })
           .toArray();
         return NextResponse.json({ success: true, folders, items });
+      }
+      case "adjacencyReadStarred": {
+        const folders = await adjFolders
+          .find({
+            ...buildOwnerIdQuery(ownerId),
+            starred: true,
+            trashedAt: { $exists: false },
+            type: { $exists: false },
+          })
+          .project({
+            _id: 0,
+            id: 1,
+            name: 1,
+            parentId: 1,
+            starred: 1,
+            authorId: 1,
+            authorName: 1,
+            authorAvatar: 1,
+          })
+          .toArray();
+        const items = await adjItems
+          .find({
+            ...buildOwnerIdQuery(ownerId),
+            starred: true,
+            trashedAt: { $exists: false },
+            type: { $in: ["image", "video", "file", "text"] },
+          })
+          .project({
+            _id: 0,
+            id: 1,
+            name: 1,
+            type: 1,
+            fileUrl: 1,
+            fileName: 1,
+            folderId: 1,
+            starred: 1,
+            authorId: 1,
+            authorName: 1,
+            authorAvatar: 1,
+          })
+          .toArray();
+        return NextResponse.json({ success: true, folders, items });
+      }
+      case "adjacencyToggleStarFolder": {
+        const folderId = String(body.folderId || "").trim();
+        const starred = !!body.starred;
+        if (!folderId)
+          return NextResponse.json(
+            { error: "Missing folderId" },
+            { status: 400 }
+          );
+        await adjFolders.updateOne(
+          { ...buildOwnerIdQuery(ownerId), id: folderId },
+          { $set: { starred, updatedAt: Date.now() } }
+        );
+        return NextResponse.json({ success: true });
+      }
+      case "adjacencyToggleStarItem": {
+        const itemId = String(body.itemId || "").trim();
+        const starred = !!body.starred;
+        if (!itemId)
+          return NextResponse.json(
+            { error: "Missing itemId" },
+            { status: 400 }
+          );
+        await adjItems.updateOne(
+          { ...buildOwnerIdQuery(ownerId), id: itemId },
+          { $set: { starred, updatedAt: Date.now() } }
+        );
+        return NextResponse.json({ success: true });
       }
       case "adjacencyCreateFolder": {
         const name = String(body.name || "").trim();

@@ -13,7 +13,7 @@ export const FileCardTitle = ({
   isEditing: boolean;
   editedName: string;
   setEditedName: (v: string) => void;
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   onSubmit: () => void;
 }) => {
   if (isEditing) {

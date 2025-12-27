@@ -15,6 +15,7 @@ type Item = {
   fileName?: string;
   content?: string;
   updatedAt: number;
+  starred?: boolean;
 };
 type FolderNode = {
   id: string;
@@ -24,6 +25,7 @@ type FolderNode = {
   items: Item[];
   createdAt?: number;
   updatedAt?: number;
+  starred?: boolean;
 };
 type FolderDoc = {
   _id?: string;
@@ -336,7 +338,7 @@ export async function POST(req: NextRequest) {
 
         const folders = await adjFolders
           .find(folderQuery)
-          .project({ _id: 0, id: 1, name: 1, parentId: 1 })
+          .project({ _id: 0, id: 1, name: 1, parentId: 1, starred: 1 })
           .toArray();
         const items = await adjItems
           .find(itemQuery)
@@ -348,6 +350,7 @@ export async function POST(req: NextRequest) {
             fileUrl: 1,
             fileName: 1,
             folderId: 1, // Need folderId to filter on frontend if needed
+            starred: 1,
           })
           .toArray();
         return NextResponse.json({
@@ -363,7 +366,14 @@ export async function POST(req: NextRequest) {
             trashedAt: { $exists: true },
             type: { $exists: false },
           })
-          .project({ _id: 0, id: 1, name: 1, parentId: 1, trashedAt: 1 })
+          .project({
+            _id: 0,
+            id: 1,
+            name: 1,
+            parentId: 1,
+            trashedAt: 1,
+            starred: 1,
+          })
           .toArray();
         const items = await adjItems
           .find({
@@ -380,9 +390,68 @@ export async function POST(req: NextRequest) {
             fileName: 1,
             folderId: 1,
             trashedAt: 1,
+            starred: 1,
           })
           .toArray();
         return NextResponse.json({ success: true, folders, items });
+      }
+      case "adjacencyReadStarred": {
+        const folders = await adjFolders
+          .find({
+            ...buildRoomIdQuery(roomId),
+            starred: true,
+            trashedAt: { $exists: false },
+            type: { $exists: false },
+          })
+          .project({ _id: 0, id: 1, name: 1, parentId: 1, starred: 1 })
+          .toArray();
+        const items = await adjItems
+          .find({
+            ...buildRoomIdQuery(roomId),
+            starred: true,
+            trashedAt: { $exists: false },
+            type: { $in: ["image", "video", "file", "text"] },
+          })
+          .project({
+            _id: 0,
+            id: 1,
+            name: 1,
+            type: 1,
+            fileUrl: 1,
+            fileName: 1,
+            folderId: 1,
+            starred: 1,
+          })
+          .toArray();
+        return NextResponse.json({ success: true, folders, items });
+      }
+      case "adjacencyToggleStarFolder": {
+        const folderId = String(body.folderId || "").trim();
+        const starred = !!body.starred;
+        if (!folderId)
+          return NextResponse.json(
+            { error: "Missing folderId" },
+            { status: 400 }
+          );
+        await adjFolders.updateOne(
+          { ...buildRoomIdQuery(roomId), id: folderId },
+          { $set: { starred, updatedAt: Date.now() } }
+        );
+        return NextResponse.json({ success: true });
+      }
+      case "adjacencyToggleStarItem": {
+        const itemId = String(body.itemId || "").trim();
+        const starred = !!body.starred;
+        if (!itemId)
+          return NextResponse.json(
+            { error: "Missing itemId" },
+            { status: 400 }
+          );
+        await adjItems.updateOne(
+          { ...buildRoomIdQuery(roomId), id: itemId },
+          { $set: { starred, updatedAt: Date.now() } }
+        );
+        return NextResponse.json({ success: true });
       }
       case "adjacencyCreateFolder": {
         const name = String(body.name || "").trim();
