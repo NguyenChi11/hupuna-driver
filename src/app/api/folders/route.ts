@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/components/(mongodb)/connectToDatabase";
-import { Storage } from "megajs";
 
 export const runtime = "nodejs";
 
@@ -92,90 +91,86 @@ function genId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function uploadToMegaInline(
-  fileBuffer: Buffer,
+async function uploadToPocketBaseInline(
+  file: File,
   originalFileName: string,
-  fileSize: number,
   subFolderName: string
 ) {
-  const pickCreds = (ownerKey: string) => {
-    const baseEmail = (process.env.MEGA_EMAIL || "").trim();
-    const basePassword = (process.env.MEGA_PASSWORD || "").trim();
-    const emails: string[] = [];
-    const passwords: string[] = [];
-    for (let i = 1; i <= 5; i++) {
-      const e = (process.env[`MEGA_EMAIL_${i}`] || "").trim();
-      const p = (process.env[`MEGA_PASSWORD_${i}`] || "").trim();
-      if (e && p) {
-        emails.push(e);
-        passwords.push(p);
-      }
-    }
-    if (!emails.length && baseEmail && basePassword) {
-      return { email: baseEmail, password: basePassword };
-    }
-    if (emails.length) {
-      let hash = 0;
-      for (let i = 0; i < ownerKey.length; i++) {
-        hash = (hash << 5) - hash + ownerKey.charCodeAt(i);
-        hash |= 0;
-      }
-      const idx = Math.abs(hash) % emails.length;
-      return { email: emails[idx], password: passwords[idx] };
-    }
-    return { email: baseEmail, password: basePassword };
-  };
-  const creds = pickCreds(subFolderName);
-  const email = creds.email;
-  const password = creds.password;
-  const masterFolder = (process.env.MASTER_FOLDER_NAME || "Uploads").trim();
-  if (!email || !password) {
-    throw new Error("Missing MEGA_EMAIL/MEGA_PASSWORD");
+  const pbUrl = (
+    process.env.NEXT_PUBLIC_POCKETBASE_URL || "https://files.hupuna.vn/"
+  ).trim();
+  const identity = (process.env.NEXT_PUBLIC_POCKETBASE_USER_ID || "").trim();
+  const password = (process.env.NEXT_PUBLIC_POCKETBASE_PASSWORD || "").trim();
+  const collectionName = (
+    process.env.NEXT_PUBLIC_POCKETBASE_COLLECTION_FILES || "files"
+  ).trim();
+  if (!identity || !password) {
+    throw new Error("Missing POCKETBASE_USER_ID/POCKETBASE_PASSWORD");
   }
-  const storage = new Storage({ email, password });
-  const ready = new Promise<void>((resolve, reject) => {
-    storage.on("ready", () => resolve());
-    storage.on("error" as never, (err) => reject(err));
+  const adminLogin = await fetch(`${pbUrl}api/admins/auth-with-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ identity, password }),
   });
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Mega login timeout")), 15000)
-  );
-  await Promise.race([ready, timeout]);
-  let master = storage.root.children?.find(
-    (n) => n.name === masterFolder && n.directory
-  );
-  if (!master) master = await storage.mkdir(masterFolder);
-  const safeSub =
-    subFolderName && subFolderName.trim() ? subFolderName.trim() : "Default";
-  let target = master.children?.find((n) => n.name === safeSub && n.directory);
-  if (!target) target = await master.mkdir(safeSub);
-
-  const name = originalFileName?.trim() || `file_${Date.now()}`;
-  const task = target.upload({ name, size: fileSize }, fileBuffer);
-  const link = await new Promise<string>((resolve, reject) => {
-    task.on(
-      "complete",
-      (uploadedFile: {
-        link: (
-          isPublic: boolean,
-          cb: (err: Error | null, url: string) => void
-        ) => void;
-      }) => {
-        uploadedFile.link(false, (err, url) => {
-          if (err) reject(err);
-          else resolve(url);
-        });
+  let token = "";
+  let modelId = "";
+  if (adminLogin.ok) {
+    const data = (await adminLogin.json()) as Record<string, unknown>;
+    token = String((data as { token?: unknown }).token || "");
+    modelId = String(
+      ((data as { admin?: { id?: unknown } }).admin || {}).id || ""
+    );
+  } else {
+    const userLogin = await fetch(
+      `${pbUrl}api/collections/users/auth-with-password`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identity, password }),
       }
     );
-    task.on("error", (err: Error) => reject(err));
-  });
-  return { link, fileName: name, folderPath: `${masterFolder}/${safeSub}` };
+    if (!userLogin.ok) {
+      throw new Error("PocketBase login failed");
+    }
+    const data = (await userLogin.json()) as Record<string, unknown>;
+    token = String((data as { token?: unknown }).token || "");
+    modelId = String(
+      ((data as { record?: { id?: unknown } }).record || {}).id || ""
+    );
+  }
+  if (!token) {
+    throw new Error("PocketBase token missing");
+  }
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("title", originalFileName || file.name);
+  fd.append("folder", subFolderName || "Default");
+  if (modelId) fd.append("users_id", modelId);
+  const createRes = await fetch(
+    `${pbUrl}api/collections/${collectionName}/records`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    }
+  );
+  if (!createRes.ok) {
+    const text = await createRes.text();
+    throw new Error(text || "PocketBase upload failed");
+  }
+  const record = (await createRes.json()) as {
+    id: string;
+    collectionId: string;
+    file: string;
+  };
+  const base = pbUrl.endsWith("/") ? pbUrl.slice(0, -1) : pbUrl;
+  const fullUrl = `${base}/api/files/${record.collectionId}/${record.id}/${record.file}`;
+  return { link: fullUrl, fileName: record.file, folderPath: subFolderName };
 }
 
 export async function POST(req: NextRequest) {
   try {
     const ct = req.headers.get("content-type") || "";
-    // Multipart upload path for items -> push to Mega and save adjacency item
     if (ct.includes("multipart/form-data")) {
       const form = await req.formData();
       const file = form.get("file") as unknown;
@@ -195,10 +190,6 @@ export async function POST(req: NextRequest) {
       if (!isValidFile) {
         return NextResponse.json({ error: "Missing file" }, { status: 400 });
       }
-      const arrayBuffer = await (
-        file as { arrayBuffer: () => Promise<ArrayBuffer> }
-      ).arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
       const { db } = await connectToDatabase();
       const subFolderName = `folder-${roomId}-${folderId}`;
       let uploadRes: {
@@ -207,17 +198,16 @@ export async function POST(req: NextRequest) {
         folderPath: string;
       } | null = null;
       try {
-        uploadRes = await uploadToMegaInline(
-          buffer,
+        uploadRes = await uploadToPocketBaseInline(
+          file as File,
           (file as { name: string }).name,
-          buffer.length,
           subFolderName
         );
       } catch (e) {
         return NextResponse.json(
           {
             success: false,
-            message: (e as Error)?.message || "Mega upload failed",
+            message: (e as Error)?.message || "PocketBase upload failed",
           },
           { status: 500 }
         );

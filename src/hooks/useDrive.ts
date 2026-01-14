@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FileItem, FolderItem, ItemType } from "@/types/types";
 import { analyzeFileAI } from "@/service/mockAiService";
 import { getProxyUrl } from "@/utils/utils";
@@ -23,14 +24,41 @@ interface RawTrashItem {
   starred?: boolean;
 }
 
-export const useDrive = () => {
+interface RawStarredFolder {
+  id: string;
+  name: string;
+  parentId?: string | null;
+  authorId?: string;
+  authorName?: string;
+  authorAvatar?: string;
+}
+
+interface RawStarredItem {
+  id: string;
+  name?: string;
+  fileName?: string;
+  type?: string;
+  folderId?: string | null;
+  fileUrl?: string;
+  authorId?: string;
+  authorName?: string;
+  authorAvatar?: string;
+}
+
+export const useDrive = (
+  initialFolderId: string | null = null,
+  initialSidebarSection: string = "all"
+) => {
+  const router = useRouter();
   const { user } = useCurrentUser();
   const roomId = user?._id || "";
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(
+    initialFolderId
+  );
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [items, setItems] = useState<FileItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sidebarSection, setSidebarSection] = useState("all");
+  const [sidebarSection, setSidebarSection] = useState(initialSidebarSection);
   const [activeType, setActiveType] = useState<string>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newType, setNewType] = useState<ItemType | "folder">("folder");
@@ -530,7 +558,13 @@ export const useDrive = () => {
         const jsonGlobal = await resGlobal.json();
 
         // Load Local Starred
-        let jsonLocal = { folders: [], items: [] };
+        let jsonLocal: {
+          folders: RawStarredFolder[];
+          items: RawStarredItem[];
+        } = {
+          folders: [],
+          items: [],
+        };
         if (roomId) {
           const resLocal = await fetch("/api/folders", {
             method: "POST",
@@ -542,7 +576,7 @@ export const useDrive = () => {
 
         const now = Date.now();
         const mapFolders = (
-          list: any[],
+          list: RawStarredFolder[],
           scope: "global" | "local"
         ): FolderItem[] =>
           (list || []).map((f) => ({
@@ -561,14 +595,17 @@ export const useDrive = () => {
               f.authorAvatar || (scope === "global" ? undefined : user?.avatar),
           }));
 
-        const mapItems = (list: any[], scope: "global" | "local"): FileItem[] =>
+        const mapItems = (
+          list: RawStarredItem[],
+          scope: "global" | "local"
+        ): FileItem[] =>
           (list || []).map((it) => ({
             id: it.id,
             name: it.name || it.fileName || "Untitled",
             type:
               it.type === "image" || it.type === "video"
                 ? it.type
-                : it.type === "text"
+                : it.type === "text" || it.type === "link"
                 ? "link"
                 : "file",
             parentId: it.folderId || null,
@@ -1080,14 +1117,9 @@ export const useDrive = () => {
 
   const handleOpen = (item: FileItem | FolderItem) => {
     if (!("type" in item)) {
-      setCurrentFolderId(item.id);
       const isGlobal = (item as FolderItem).scope === "global";
-      if (isGlobal) {
-        setSidebarSection("global:all");
-      } else {
-        setSidebarSection("all");
-      }
-      setActiveType("all");
+      const query = isGlobal ? "?scope=global" : "";
+      router.push(`/folder/${item.id}${query}`);
       return;
     }
     const t = item.type;

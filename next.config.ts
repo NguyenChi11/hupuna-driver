@@ -20,6 +20,17 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "cdn.jsdelivr.net",
       },
+      {
+        protocol: "https",
+        hostname: "files.hupuna.vn",
+        pathname: "/api/files/**",
+      },
+      {
+        protocol: "http",
+        hostname: "117.4.242.30",
+        port: "8090",
+        pathname: "/api/files/**",
+      },
     ],
   },
 };

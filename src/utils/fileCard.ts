@@ -1,7 +1,7 @@
 import { FileItem, FolderItem } from "@/types/types";
 import { ICONS } from "@/components/constants";
 
-export const isFolder = (item: FileItem | FolderItem) => !("type" in item);
+export const isFolder = (item: FileItem | FolderItem): item is FolderItem => !("type" in item);
 
 export const getItemType = (item: FileItem | FolderItem) =>
   isFolder(item) ? "folder" : item.type;

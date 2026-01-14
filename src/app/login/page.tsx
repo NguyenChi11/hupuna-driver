@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ICONS } from "@/components/constants";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
