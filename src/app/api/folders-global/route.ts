@@ -353,12 +353,10 @@ export async function POST(req: NextRequest) {
         const recursive = !!body.recursive;
 
         const folderQuery: Record<string, unknown> = {
-          ...buildOwnerIdQuery(ownerId),
           trashedAt: { $exists: false },
           type: { $exists: false },
         };
         const itemQuery: Record<string, unknown> = {
-          ...buildOwnerIdQuery(ownerId),
           trashedAt: { $exists: false },
           type: { $in: ["image", "video", "file", "text"] },
         };
@@ -406,7 +404,6 @@ export async function POST(req: NextRequest) {
       case "adjacencyReadTrash": {
         const folders = await adjFolders
           .find({
-            ...buildOwnerIdQuery(ownerId),
             trashedAt: { $exists: true },
             type: { $exists: false },
           })
@@ -448,7 +445,6 @@ export async function POST(req: NextRequest) {
       case "adjacencyReadStarred": {
         const folders = await adjFolders
           .find({
-            ...buildOwnerIdQuery(ownerId),
             starred: true,
             trashedAt: { $exists: false },
             type: { $exists: false },
@@ -466,7 +462,6 @@ export async function POST(req: NextRequest) {
           .toArray();
         const items = await adjItems
           .find({
-            ...buildOwnerIdQuery(ownerId),
             starred: true,
             trashedAt: { $exists: false },
             type: { $in: ["image", "video", "file", "text"] },

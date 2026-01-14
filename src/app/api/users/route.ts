@@ -3,6 +3,9 @@ import { getAllRows } from "@/lib/mongoDBCRUD";
 import { User, USERS_COLLECTION_NAME } from "@/types/User";
 import { signJWT } from "@/lib/auth";
 import { createSession, fingerprintFromHeaders } from "@/lib/session";
+import bcrypt from "bcrypt";
+import { connectToDatabase } from "@/components/(mongodb)/connectToDatabase";
+import { Filter, ObjectId, Document } from "mongodb";
 
 export const runtime = "nodejs";
 
@@ -37,7 +40,6 @@ export async function POST(req: NextRequest) {
         const queryResult = await getAllRows<User>(collectionName, {
           filters: {
             username,
-            password,
           },
           limit: 1,
         });
@@ -45,6 +47,39 @@ export async function POST(req: NextRequest) {
         const found = queryResult.data?.[0];
 
         if (!found) {
+          return NextResponse.json(
+            { success: false, message: "Username hoặc Password không đúng!" },
+            { status: 401 }
+          );
+        }
+
+        let ok = await bcrypt.compare(
+          String(password),
+          String(found.password || "")
+        );
+        if (!ok && String(found.password || "") === String(password)) {
+          try {
+            const { db } = await connectToDatabase();
+            const userCollection = db.collection(collectionName);
+            const idStr = String(found._id);
+            const orFilters: Array<Record<string, unknown>> = [{ _id: idStr }];
+            if (!isNaN(Number(idStr))) {
+              orFilters.push({ _id: Number(idStr) });
+            }
+            if (ObjectId.isValid(idStr) && idStr.length === 24) {
+              orFilters.push({ _id: new ObjectId(idStr) });
+            }
+            const hashed = await bcrypt.hash(String(password), 12);
+            await userCollection.updateOne(
+              { $or: orFilters } as Filter<Document>,
+              {
+                $set: { password: hashed },
+              }
+            );
+            ok = true;
+          } catch {}
+        }
+        if (!ok) {
           return NextResponse.json(
             { success: false, message: "Username hoặc Password không đúng!" },
             { status: 401 }

@@ -253,8 +253,7 @@ export const useDrive = (
     const load = async () => {
       try {
         const type = isGlobal ? sidebarSection.slice(7) : sidebarSection;
-        const isCategory = ["image", "video", "link", "file"].includes(type);
-        const isRecursive = !currentFolderId || isCategory;
+        const isRecursive = true;
 
         const endpoint = isGlobal ? "/api/folders-global" : "/api/folders";
         const body = isGlobal
@@ -285,6 +284,9 @@ export const useDrive = (
             name: string;
             parentId?: string;
             starred?: boolean;
+            authorId?: string;
+            authorName?: string;
+            authorAvatar?: string;
           }) => ({
             id: f.id,
             name: f.name,
@@ -296,11 +298,11 @@ export const useDrive = (
             createdAt: now,
             scope,
             starred: f.starred,
-            authorId: isGlobal ? undefined : user?._id,
-            authorName: isGlobal ? undefined : user?.name,
+            authorId: isGlobal ? f.authorId : f.authorId || user?._id,
+            authorName: isGlobal ? f.authorName : f.authorName || user?.name,
             authorAvatar: isGlobal
-              ? undefined
-              : (user?.avatar as string | undefined),
+              ? f.authorAvatar
+              : f.authorAvatar || (user?.avatar as string | undefined),
           })
         );
         let srvItems: FileItem[] = (json.items || []).map(
@@ -312,6 +314,9 @@ export const useDrive = (
             fileName?: string;
             folderId?: string;
             starred?: boolean;
+            authorId?: string;
+            authorName?: string;
+            authorAvatar?: string;
           }) => ({
             id: it.id,
             name: it.name || it.fileName || "Untitled",
@@ -327,11 +332,11 @@ export const useDrive = (
             url: it.fileUrl ? getProxyUrl(it.fileUrl) : undefined,
             scope,
             starred: it.starred,
-            authorId: isGlobal ? undefined : user?._id,
-            authorName: isGlobal ? undefined : user?.name,
+            authorId: isGlobal ? it.authorId : it.authorId || user?._id,
+            authorName: isGlobal ? it.authorName : it.authorName || user?.name,
             authorAvatar: isGlobal
-              ? undefined
-              : (user?.avatar as string | undefined),
+              ? it.authorAvatar
+              : it.authorAvatar || (user?.avatar as string | undefined),
           })
         );
         srvFolders = enrichWithAuthorCache(srvFolders);
@@ -768,7 +773,7 @@ export const useDrive = (
       const newItems: FileItem[] = [];
 
       if (newType !== "link" && files.length > 0) {
-        // Multi-file upload
+        // Multi-file upload (cũng dùng cho single file, nhưng xử lý theo từng file)
         for (const f of files) {
           let finalName = f.name;
           if (files.length === 1 && newName) {
@@ -777,13 +782,27 @@ export const useDrive = (
 
           const aiData = await analyzeFileAI(finalName, newType);
 
+          // Suy ra type theo từng file dựa trên MIME, để ảnh/video không bị gom chung
+          let inferredType: ItemType = "file";
+          if (f.type.startsWith("image/")) inferredType = "image";
+          else if (f.type.startsWith("video/")) inferredType = "video";
+          else if (
+            newType === "image" ||
+            newType === "video" ||
+            newType === "file"
+          ) {
+            inferredType = newType as ItemType;
+          }
+
           try {
             const form = new FormData();
             form.append("file", f);
             form.append(
               "type",
-              newType === "image" || newType === "video" || newType === "file"
-                ? newType
+              inferredType === "image" ||
+                inferredType === "video" ||
+                inferredType === "file"
+                ? inferredType
                 : "file"
             );
             form.append("folderId", (targetParentId ?? "root") as string);
@@ -816,7 +835,7 @@ export const useDrive = (
               newItems.push({
                 id: itemId,
                 name: finalName,
-                type: newType as ItemType,
+                type: inferredType,
                 parentId: targetParentId,
                 createdAt: Date.now(),
                 url: finalUrl,
