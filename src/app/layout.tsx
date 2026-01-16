@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import {
   Geist,
   Geist_Mono,
   Patrick_Hand,
   Be_Vietnam_Pro,
 } from "next/font/google";
-import "@/app/globals.css";
+import "./globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,12 +42,70 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const CHAT_ORIGIN =
+    process.env.NEXT_PUBLIC_CHAT_ORIGIN || "http://localhost:3000";
+  const CHAT_HOST = (() => {
+    try {
+      return new URL(CHAT_ORIGIN).hostname;
+    } catch {
+      return "localhost";
+    }
+  })();
   return (
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${beVietnamPro.variable} ${patrickHand.variable} antialiased`}
         suppressHydrationWarning
       >
+        <Script
+          src={`${CHAT_ORIGIN}/chat-widget.js`}
+          strategy="afterInteractive"
+          data-src={`${CHAT_ORIGIN}/chat-iframe?site=driver-hupuna`}
+        />
+        <Script id="hupuna-widget-listener" strategy="afterInteractive">
+          {`
+            (function(){
+              var CHAT_ORIGIN = ${JSON.stringify(CHAT_ORIGIN)};
+              var CHAT_HOST = ${JSON.stringify(CHAT_HOST)};
+              window.addEventListener('message', function(e){
+                var data = e && e.data;
+                if (!data || typeof data !== 'object') return;
+                if (data.type === 'HUPUNA_WIDGET_NOTIFY_COUNT') {
+                  try {
+                    console.debug('Hupuna count:', data.count);
+                  } catch {}
+                }
+                if (data.type === 'HUPUNA_WIDGET_CALL') {
+                  try {
+                    console.debug('Hupuna call active:', !!data.active);
+                  } catch {}
+                }
+                if (data.type === 'HUPUNA_SSO_REQUEST') {
+                  try {
+                    fetch('/api/sso/issue?aud=' + encodeURIComponent(CHAT_HOST) + '&redirect=' + encodeURIComponent(CHAT_ORIGIN + '/api/sso/consume?next=/chat-iframe'), { credentials: 'include' })
+                      .then(function(r){ return r.json(); })
+                      .then(function(json){
+                        var token = json && json.token;
+                        if (!token) return;
+                        var targetOrigin = CHAT_ORIGIN;
+                        var msg = { type: 'HUPUNA_SSO_TOKEN', token: token };
+                        var frames = document.getElementsByTagName('iframe');
+                        for (var i=0;i<frames.length;i++){
+                          try { frames[i].contentWindow && frames[i].contentWindow.postMessage(msg, targetOrigin); } catch {}
+                        }
+                      })
+                      .catch(function(){});
+                  } catch {}
+                }
+              });
+              window.HupunaChat = {
+                open: function(){ try { window.HupunaChatWidget && window.HupunaChatWidget.open(); } catch {} },
+                close: function(){ try { window.HupunaChatWidget && window.HupunaChatWidget.close(); } catch {} },
+                toggle: function(){ try { window.HupunaChatWidget && window.HupunaChatWidget.toggle(); } catch {} }
+              };
+            })();
+          `}
+        </Script>
         {children}
       </body>
     </html>
