@@ -44,13 +44,6 @@ export default function RootLayout({
 }>) {
   const CHAT_ORIGIN =
     process.env.NEXT_PUBLIC_CHAT_ORIGIN || "http://localhost:3000";
-  const CHAT_HOST = (() => {
-    try {
-      return new URL(CHAT_ORIGIN).hostname;
-    } catch {
-      return "localhost";
-    }
-  })();
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -66,42 +59,50 @@ export default function RootLayout({
           {`
             (function(){
               var CHAT_ORIGIN = ${JSON.stringify(CHAT_ORIGIN)};
-              var CHAT_HOST = ${JSON.stringify(CHAT_HOST)};
               window.addEventListener('message', function(e){
                 var data = e && e.data;
                 if (!data || typeof data !== 'object') return;
-                if (data.type === 'HUPUNA_WIDGET_NOTIFY_COUNT') {
-                  try {
-                    console.debug('Hupuna count:', data.count);
-                  } catch {}
-                }
-                if (data.type === 'HUPUNA_WIDGET_CALL') {
-                  try {
-                    console.debug('Hupuna call active:', !!data.active);
-                  } catch {}
-                }
                 if (data.type === 'HUPUNA_SSO_REQUEST') {
                   try {
-                    fetch('/api/sso/issue?aud=' + encodeURIComponent(CHAT_HOST) + '&redirect=' + encodeURIComponent(CHAT_ORIGIN + '/api/sso/consume?next=/chat-iframe'), { credentials: 'include' })
-                      .then(function(r){ return r.json(); })
+                    var iframeOrigin = CHAT_ORIGIN;
+                    try {
+                      if (window.HupunaChatWidget && window.HupunaChatWidget.iframe && window.HupunaChatWidget.iframe.src) {
+                        iframeOrigin = new URL(window.HupunaChatWidget.iframe.src, window.location.href).origin;
+                      }
+                    } catch {}
+
+                    fetch('/api/sso/issue?aud=chat', { credentials: 'include' })
+                      .then(function(r){ return r.json().catch(function(){ return null; }); })
                       .then(function(json){
-                        var token = json && json.token;
+                        var token = json && json.success && json.token;
                         if (!token) return;
-                        var targetOrigin = CHAT_ORIGIN;
                         var msg = { type: 'HUPUNA_SSO_TOKEN', token: token };
-                        var frames = document.getElementsByTagName('iframe');
-                        for (var i=0;i<frames.length;i++){
-                          try { frames[i].contentWindow && frames[i].contentWindow.postMessage(msg, targetOrigin); } catch {}
-                        }
+                        try {
+                          if (window.HupunaChatWidget && window.HupunaChatWidget.iframe && window.HupunaChatWidget.iframe.contentWindow) {
+                            window.HupunaChatWidget.iframe.contentWindow.postMessage(msg, iframeOrigin);
+                          } else {
+                            var frames = document.getElementsByTagName('iframe');
+                            for (var i=0;i<frames.length;i++){
+                              var f = frames[i];
+                              var src = '';
+                              try { src = f.src || ''; } catch {}
+                              if (src && src.indexOf(iframeOrigin) === 0) {
+                                try { f.contentWindow && f.contentWindow.postMessage(msg, iframeOrigin); } catch {}
+                                break;
+                              }
+                            }
+                          }
+                        } catch {}
                       })
                       .catch(function(){});
                   } catch {}
                 }
               });
+
               window.HupunaChat = {
-                open: function(){ try { window.HupunaChatWidget && window.HupunaChatWidget.open(); } catch {} },
-                close: function(){ try { window.HupunaChatWidget && window.HupunaChatWidget.close(); } catch {} },
-                toggle: function(){ try { window.HupunaChatWidget && window.HupunaChatWidget.toggle(); } catch {} }
+                open: function(){ try { window.HupunaChatWidget && window.HupunaChatWidget.open && window.HupunaChatWidget.open(); } catch {} },
+                close: function(){ try { window.HupunaChatWidget && window.HupunaChatWidget.close && window.HupunaChatWidget.close(); } catch {} },
+                toggle: function(){ try { window.HupunaChatWidget && window.HupunaChatWidget.toggle && window.HupunaChatWidget.toggle(); } catch {} }
               };
             })();
           `}

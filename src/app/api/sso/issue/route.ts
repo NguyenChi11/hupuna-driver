@@ -8,18 +8,25 @@ export async function GET(req: NextRequest) {
   try {
     const url = req.nextUrl;
     const redirect = url.searchParams.get("redirect") || "";
-    const aud = url.searchParams.get("aud") || url.hostname;
+    const aud = "chat";
 
     const tokenFromCookie = req.cookies.get("session_token")?.value || "";
-    if (!tokenFromCookie)
-      return NextResponse.json({ success: false }, { status: 401 });
+    if (!tokenFromCookie) {
+      return NextResponse.json({ success: false, token: "" }, { status: 200 });
+    }
 
     const payload = await verifyJWT(tokenFromCookie);
-    if (!payload || typeof payload["_id"] !== "string")
-      return NextResponse.json({ success: false }, { status: 401 });
+    if (!payload || typeof payload["_id"] !== "string") {
+      return NextResponse.json({ success: false, token: "" }, { status: 200 });
+    }
+    const roleFromCookie =
+      typeof payload["role"] === "string" ? String(payload["role"]) : "";
+    if (roleFromCookie !== "driver") {
+      return NextResponse.json({ success: false, token: "" }, { status: 200 });
+    }
 
     const jti = `${Math.random().toString(36).slice(2)}${Date.now().toString(
-      36
+      36,
     )}`;
     const fp = fingerprintFromHeaders({
       "user-agent": req.headers.get("user-agent") || "",
@@ -32,11 +39,17 @@ export async function GET(req: NextRequest) {
         sub: String(payload["_id"]),
         username: String(payload["username"] || ""),
         name: String(payload["name"] || ""),
+        role: roleFromCookie,
+        driverId:
+          typeof payload["driverId"] === "string"
+            ? String(payload["driverId"])
+            : String(payload["_id"]),
+        iss: "driver-hupuna",
         aud,
         jti,
         fp,
       },
-      60
+      60,
     );
 
     const composedUrl = redirect
@@ -51,6 +64,6 @@ export async function GET(req: NextRequest) {
       url: composedUrl,
     });
   } catch {
-    return NextResponse.json({ success: false }, { status: 500 });
+    return NextResponse.json({ success: false, token: "" }, { status: 200 });
   }
 }

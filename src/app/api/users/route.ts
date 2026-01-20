@@ -103,6 +103,8 @@ export async function POST(req: NextRequest) {
           _id: String(found._id),
           username: String(found.username || ""),
           name: String(found.name || ""),
+          role: String(found.role || "driver"),
+          driverId: String(found._id),
           sid,
           fp,
         });
